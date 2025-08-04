@@ -41,22 +41,27 @@ class AttendanceController extends Controller
 
         $data = json_decode($response->getBody(), true);
 
-        if (isset($data['id'])) {
-            $employee = Employee::find($data['id']);
-            if ($employee) {
-                Attendance::create([
-                    'employee_id' => $employee->id,
-                    'attendance_time' => now(),
-                    'latitude' => $latitude,
-                    'longitude' => $longitude,
-                ]);
-                return response()->json(['message' => 'Attendance marked successfully']);
-            } else {
-                return response()->json(['error' => 'Employee not found'], 404);
-            }
-        } else {
-            return response()->json(['error' => 'No match found'], 404);
-        }
+if (isset($data['identity'])) {
+    $identity = $data['identity']; // like "employee_1"
+
+    $employeeId = (int) str_replace('employee_', '', $identity);
+    $employee = Employee::find($employeeId);
+
+    if ($employee) {
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_time' => now(),
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+        ]);
+        return response()->json(['message' => 'Attendance marked successfully']);
+    } else {
+        return response()->json(['error' => 'Employee not found'], 404);
+    }
+} else {
+    return response()->json(['error' => 'No match found'], 404);
+}
+
     } catch (\Exception $e) {
         return response()->json(['error' => 'Recognition failed: ' . $e->getMessage()], 500);
     }

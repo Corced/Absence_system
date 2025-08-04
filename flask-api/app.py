@@ -2,7 +2,7 @@ import cv2
 import os
 import numpy as np
 from flask import Flask, request, jsonify
-
+import pdb
 app = Flask(__name__)
 recognizer = cv2.face.LBPHFaceRecognizer_create()
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -43,13 +43,13 @@ def recognize():
     print("🔵 Request received at /recognize")
 
     if 'image' not in request.files:
-        print("❌ No image in request")
+        print("❌ No image in request.files")
         return jsonify({'error': 'No image provided'}), 400
 
     file = request.files['image']
     img_bytes = file.read()
 
-    # Decode image from bytes
+    # Decode image
     nparr = np.frombuffer(img_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
 
@@ -59,9 +59,13 @@ def recognize():
 
     print("📸 Image successfully decoded")
 
-    # Detect face(s)
+    # Face detection
     faces = face_cascade.detectMultiScale(img, 1.3, 5)
     print(f"🔍 Detected {len(faces)} face(s)")
+
+    if len(faces) == 0:
+        print("❌ No faces detected in image")
+        return jsonify({'error': 'No face detected'}), 404
 
     for (x, y, w, h) in faces:
         face_img = img[y:y + h, x:x + w]
@@ -69,12 +73,15 @@ def recognize():
         print(f"🧠 Prediction: ID={id}, Confidence={confidence}")
 
         if confidence < 100:
-            identity = f'employee_{id + 1}'  # Adjust ID to match Laravel side
+            identity = f'employee_{id + 1}'
             print(f"✅ Match found: {identity}")
-            return jsonify({'identity': identity})
+            return jsonify({'identity': identity}), 200
+        else:
+            print(f"❌ Prediction confidence too low: {confidence}")
 
-    print("❌ No face matched")
+    print("❌ No face matched in the loop — returning 404")
     return jsonify({'error': 'No match found'}), 404
+
 
 @app.route('/train', methods=['POST'])
 def retrain():
