@@ -45,7 +45,10 @@ const AttendanceMarker = () => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           }, {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            },
           });
 
           const { status, message } = response.data;
@@ -56,7 +59,11 @@ const AttendanceMarker = () => {
           );
         } catch (err) {
           console.error('Verification error:', err);
-          setError(err.response?.data?.error || 'Face verification failed');
+          if (err.response?.status === 401) {
+            setError('Session expired. Please log in again.');
+          } else {
+            setError(err.response?.data?.error || 'Face verification failed');
+          }
         } finally {
           setLoading(false);
         }
@@ -71,11 +78,19 @@ const AttendanceMarker = () => {
 
   const retrainModel = async () => {
     try {
-      const res = await axios.post('/api/attendance/train');
+      const res = await axios.post('/api/attendance/train', {}, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
       alert(res.data.message || 'Model retrained');
     } catch (err) {
       console.error(err);
-      alert('Failed to retrain model');
+      if (err.response?.status === 401) {
+        alert('Session expired. Please log in again to retrain the model.');
+      } else {
+        alert('Failed to retrain model');
+      }
     }
   };
 
@@ -89,7 +104,19 @@ const AttendanceMarker = () => {
       />
       <p className="mt-2 text-sm text-gray-600">{locationStatus}</p>
       {loading && <p className="text-blue-500">Processing...</p>}
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      {error && (
+        <p className="text-red-500 text-sm">
+          {error}
+          {error.includes('Session expired') && (
+            <button 
+              onClick={() => window.location.href = '/login'}
+              className="ml-2 text-blue-500 underline"
+            >
+              Go to Login
+            </button>
+          )}
+        </p>
+      )}
       {verificationStatus && <p className="text-green-600 font-semibold">{verificationStatus}</p>}
 
       <button
