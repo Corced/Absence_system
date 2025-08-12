@@ -12,5 +12,9 @@ class Attendance extends Model
         'latitude',
         'longitude',
     ];
-}
 
+    public function employee()
+    {
+        return $this->belongsTo(Employee::class);
+    }
+}

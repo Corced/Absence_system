@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -16,14 +15,20 @@ const Login = ({ setIsAuthenticated }) => {
         setError('');
 
         try {
-            const response = await axios.post('api/login', {
+            const response = await axios.post('/api/login', {
                 email,
                 password,
             });
 
             localStorage.setItem('auth_token', response.data.access_token);
+            localStorage.setItem('role', response.data.role);
             setIsAuthenticated(true);
-            navigate('/attendance');
+
+            if (response.data.role === 'admin') {
+                navigate('/admin');
+            } else {
+                navigate('/attendance');
+            }
         } catch (err) {
             setError(err.response?.data?.message || 'Login failed');
         } finally {
@@ -31,12 +36,13 @@ const Login = ({ setIsAuthenticated }) => {
         }
     };
 
+    // Existing JSX remains unchanged
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col justify-center py-12 px-4">
             <div className="max-w-md w-full mx-auto bg-white p-8 rounded-lg shadow-md">
                 <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-gray-800">Attendance System</h2>
-                    <p className="mt-2 text-gray-600">Sign in to mark your attendance</p>
+                    <h2 className="text-3xl font-bold text-gray-800">RST : Sistem Absensi</h2>
+                    <p className="mt-2 text-gray-600">Login untuk melakukan absensi</p>
                 </div>
                 
                 {error && (

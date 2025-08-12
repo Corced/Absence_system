@@ -7,85 +7,241 @@ use App\Models\Employee;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+
 class AttendanceController extends Controller
 {
- public function markAttendance(Request $request)
-{
-    
-    $request->validate([
-        'image' => 'required|string',
-        'latitude' => 'required|numeric|between:-90,90',
-        'longitude' => 'required|numeric|between:-180,180',
-    ]);
+    private $hospitalLocations = [
+        ['lat' => -7.9901595, 'lon' => 112.6205187],
+        ['lat' => -7.9903000, 'lon' => 112.6206000],
+        ['lat' => -7.9900000, 'lon' => 112.6207000],
+    ];
+    private $geofenceRadius = 2000;
 
-    $imageData = $request->input('image'); // base64 image string
-    $latitude = $request->input('latitude');
-    $longitude = $request->input('longitude');
-    $client = new Client();
 
-    try {
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    {
+        $earthRadius = 6371000;
+        $lat1 = deg2rad($lat1);
+        $lon1 = deg2rad($lon1);
+        $lat2 = deg2rad($lat2);
+        $lon2 = deg2rad($lon2);
+
+        $dlat = $lat2 - $lat1;
+        $dlon = $lon2 - $lon1;
+
+        $a = sin($dlat / 2) * sin($dlat / 2) +
+             cos($lat1) * cos($lat2) * sin($dlon / 2) * sin($dlon / 2);
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
+    }
+
+    private function isWithinGeofence($lat, $lon)
+    {
+        $closestDistance = PHP_FLOAT_MAX;
+        foreach ($this->hospitalLocations as $location) {
+            $distance = $this->calculateDistance($lat, $lon, $location['lat'], $location['lon']);
+            $closestDistance = min($closestDistance, $distance);
+            if ($distance <= $this->geofenceRadius) {
+                return [true, $distance];
+            }
+        }
+        return [false, $closestDistance];
+    }
+
+    private function getAddress($lat, $lon)
+    {
+        try {
+            $client = new Client(['headers' => ['User-Agent' => 'AttendanceSystem/1.0']]);
+            $response = $client->get("https://nominatim.openstreetmap.org/reverse?format=json&lat={$lat}&lon={$lon}");
+            $data = json_decode($response->getBody(), true);
+            $address = $data['display_name'] ?? 'Unknown location';
+
+            if (stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') === false &&
+                stripos($address, 'S. Supriadi') === false) {
+                return 'Location not at Rumah Sakit Tentara Dokter Soepraoen';
+            }
+
+            return $address;
+        } catch (\Exception $e) {
+            Log::warning('Geocoding failed for lat: ' . $lat . ', lon: ' . $lon, ['error' => $e->getMessage()]);
+            return 'Unable to retrieve location';
+        }
+    }
+
+    public function markAttendance(Request $request)
+    {
+        $request->validate([
+            'image' => 'required|string',
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+        ]);
+
+        $imageData = $request->input('image');
+        $latitude = $request->input('latitude');
+        $longitude = $request->input('longitude');
+
+        [$isWithinGeofence, $distance] = $this->isWithinGeofence($latitude, $longitude);
+        if (!$isWithinGeofence) {
+            return response()->json([
+                'error' => 'You are outside the hospital premises. Closest distance: ' . round($distance, 2) . ' meters'
+            ], 403);
+        }
+
+        $client = new Client();
+
+        try {
+            $imageBinary = base64_decode($imageData);
+            if (!$imageBinary) {
+                return response()->json(['error' => 'Invalid base64 image data'], 422);
+            }
+
+            $response = $client->post('http://localhost:5000/recognize', [
+                'multipart' => [
+                    [
+                        'name' => 'image',
+                        'contents' => $imageBinary,
+                        'filename' => 'webcam.jpg',
+                    ],
+                ],
+            ]);
+
+            $data = json_decode($response->getBody(), true);
+
+            if (isset($data['identity'])) {
+                $identity = $data['identity'];
+                $employeeId = (int) str_replace('employee_', '', $identity);
+                $employee = Employee::find($employeeId);
+
+                if (!$employee) {
+                    return response()->json(['error' => 'Employee not found'], 404);
+                }
+
+                $user = Auth::user();
+                if ($employee->user_id !== $user->id) {
+                    return response()->json(['error' => 'Unauthorized: Face does not match logged-in user'], 403);
+                }
+
+                $address = $this->getAddress($latitude, $longitude);
+                if (stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') === false &&
+                    stripos($address, 'S. Supriadi') === false) {
+                    return response()->json(['error' => 'Location not at Rumah Sakit Tentara Dokter Soepraoen'], 403);
+                }
+
+                Attendance::create([
+                    'employee_id' => $employee->id,
+                    'attendance_time' => now(),
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'address' => $address,
+                    'distance' => $distance,
+                ]);
+                return response()->json(['message' => 'Attendance marked successfully']);
+            } else {
+                return response()->json(['error' => 'No match found'], 404);
+            }
+        } catch (\Exception $e) {
+            Log::error('Recognition failed for user: ' . Auth::id(), ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Recognition failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function trainModel(Request $request)
+    {
+        $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'image' => 'required|string', // Base64-encoded image
+        ]);
+
+        $employeeId = $request->input('employee_id');
+        $imageData = $request->input('image');
+
+        // Save image temporarily for facial recognition service
         $imageBinary = base64_decode($imageData);
         if (!$imageBinary) {
             return response()->json(['error' => 'Invalid base64 image data'], 422);
         }
 
-        $response = $client->post('http://localhost:5000/recognize', [
-            'multipart' => [
-                [
-                    'name' => 'image',
-                    'contents' => $imageBinary,
-                    'filename' => 'webcam.jpg',
+        $tempPath = "temp/employee_{$employeeId}_train.jpg";
+        Storage::disk('local')->put($tempPath, $imageBinary);
+
+        $client = new Client();
+
+        try {
+            $response = $client->post('http://localhost:5000/train', [
+                'multipart' => [
+                    [
+                        'name' => 'employee_id',
+                        'contents' => (string) $employeeId,
+                    ],
+                    [
+                        'name' => 'image',
+                        'contents' => fopen(storage_path("app/{$tempPath}"), 'r'),
+                        'filename' => 'train.jpg',
+                    ],
                 ],
-            ],
-        ]);
+            ]);
 
-        $data = json_decode($response->getBody(), true);
+            Storage::disk('local')->delete($tempPath); // Clean up
 
-if (isset($data['identity'])) {
-    $identity = $data['identity']; // like "employee_1"
-
-    $employeeId = (int) str_replace('employee_', '', $identity);
-    $employee = Employee::find($employeeId);
-
-    if ($employee) {
-        Attendance::create([
-            'employee_id' => $employee->id,
-            'attendance_time' => now(),
-            'latitude' => $latitude,
-            'longitude' => $longitude,
-        ]);
-        return response()->json(['message' => 'Attendance marked successfully']);
-    } else {
-        return response()->json(['error' => 'Employee not found'], 404);
+            $data = json_decode($response->getBody(), true);
+            return response()->json([
+                'message' => $data['message'] ?? "Training complete for employee_{$employeeId}",
+            ]);
+        } catch (\Exception $e) {
+            Storage::disk('local')->delete($tempPath); // Clean up on error
+            Log::error('Model training failed for employee: ' . $employeeId, ['error' => $e->getMessage()]);
+            return response()->json([
+                'error' => 'Failed to trigger model training: ' . $e->getMessage(),
+            ], 500);
+        }
     }
-} else {
-    return response()->json(['error' => 'No match found'], 404);
-}
 
-    } catch (\Exception $e) {
-        return response()->json(['error' => 'Recognition failed: ' . $e->getMessage()], 500);
+    public function getAttendances()
+    {
+        if (Auth::user()->role !== 'admin') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $attendances = Attendance::with('employee')->latest()->get();
+        $client = new Client(['headers' => ['User-Agent' => 'AttendanceSystem/1.0']]);
+
+        foreach ($attendances as $att) {
+            if (!$att->address || stripos($att->address, 'Unable to retrieve') !== false) {
+                try {
+                    $response = $client->get("https://nominatim.openstreetmap.org/reverse?format=json&lat={$att->latitude}&lon={$att->longitude}");
+                    $data = json_decode($response->getBody(), true);
+                    $address = $data['display_name'] ?? 'Unknown location';
+                    $att->address = stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') !== false ||
+                                    stripos($address, 'S. Supriadi') !== false
+                        ? $address
+                        : 'Location not at Rumah Sakit Tentara Dokter Soepraoen';
+                    $att->save();
+                    sleep(1);
+                } catch (\Exception $e) {
+                    $att->address = 'Unable to retrieve location';
+                    Log::warning('Geocoding failed for lat: ' . $att->latitude . ', lon: ' . $att->longitude, ['error' => $e->getMessage()]);
+                }
+            }
+            if (is_null($att->distance)) {
+                [$isWithinGeofence, $distance] = $this->isWithinGeofence($att->latitude, $att->longitude);
+                $att->distance = $distance;
+                $att->save();
+            }
+        }
+
+        return response()->json($attendances);
     }
-}
-    public function trainModel(){
-    $client = new \GuzzleHttp\Client();
 
-    try {
-        $response = $client->post('http://localhost:5000/train', [
-            'headers' => [
-                'Accept' => 'application/json',
-            ],
-        ]);
+    public function getEmployees()
+    {
+        if (Auth::user()->role !== 'admin') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
 
-        $data = json_decode($response->getBody(), true);
-
-        return response()->json([
-            'message' => $data['message'] ?? 'Training complete',
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'error' => 'Failed to trigger model training: ' . $e->getMessage(),
-        ], 500);
+        $employees = Employee::all();
+        return response()->json($employees);
     }
-}
-
 }

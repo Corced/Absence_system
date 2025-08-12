@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Support\Facades\Route;
@@ -11,4 +10,6 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/attendance/mark', [AttendanceController::class, 'markAttendance']);
     Route::post('/attendance/train', [AttendanceController::class, 'trainModel']);
+    Route::get('/attendance', [AttendanceController::class, 'getAttendances']);
+    Route::get('/employees', [AttendanceController::class, 'getEmployees']);
 });

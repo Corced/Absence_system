@@ -1,142 +1,98 @@
-import React, { useRef, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 const AttendanceMarker = () => {
-  const webcamRef = useRef(null);
-  const [locationStatus, setLocationStatus] = useState('Not requested');
-  const [verificationStatus, setVerificationStatus] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+    const [location, setLocation] = useState(null);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const webcamRef = useRef(null);
+    const navigate = useNavigate();
 
-  const captureAndVerify = async () => {
-    setError('');
-    setVerificationStatus('');
+    useEffect(() => {
+        // Set Axios default headers with token
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        } else {
+            setError('No authentication token found. Please log in.');
+            navigate('/login');
+        }
 
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
-      return;
-    }
+        // Get geolocation
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setLocation({
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                    });
+                },
+                (err) => {
+                    setError('Failed to get location: ' + err.message);
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        } else {
+            setError('Geolocation is not supported by this browser.');
+        }
+    }, [navigate]);
 
-    setLocationStatus('Requesting location...');
-    setLoading(true);
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        setLocationStatus('Location acquired');
+    const markAttendance = async () => {
+        if (!webcamRef.current || !location) {
+            setError('Camera or location not available.');
+            return;
+        }
 
         const imageSrc = webcamRef.current.getScreenshot();
         if (!imageSrc) {
-          setError('Failed to capture image');
-          setLoading(false);
-          return;
+            setError('Failed to capture image.');
+            return;
         }
 
         try {
-          const base64Image = imageSrc.replace(/^data:image\/jpeg;base64,/, '');
-          console.log('Sending:', {
-            image: base64Image.slice(0, 30) + '...',
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          });
+            const response = await axios.post('http://localhost:8000/api/attendance/mark', {
+                image: imageSrc.split(',')[1], // Remove base64 prefix
+                latitude: location.latitude,
+                longitude: location.longitude,
+            });
 
-          const response = await axios.post('/api/attendance/mark', {
-            image: base64Image,
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          }, {
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-            },
-          });
-
-          const { status, message } = response.data;
-          setVerificationStatus(
-            status === 'verified'
-              ? '✅ Verified!'
-              : `❌ ${message || 'Not recognized'}`
-          );
+            setSuccess(response.data.message);
+            setError('');
         } catch (err) {
-          console.error('Verification error:', err);
-          if (err.response?.status === 401) {
-            setError('Session expired. Please log in again.');
-          } else {
-            setError(err.response?.data?.error || 'Face verification failed');
-          }
-        } finally {
-          setLoading(false);
+            setError(err.response?.data?.error || 'Failed to mark attendance.');
+            setSuccess('');
+            console.error('Attendance marking failed:', err);
         }
-      },
-      (geoErr) => {
-        setLocationStatus('Location access denied');
-        setError('Please allow location access to verify identity');
-        setLoading(false);
-      }
+    };
+
+    return (
+        <div className="container mx-auto p-6 bg-gray-100 min-h-screen">
+            <h1 className="text-3xl font-bold text-gray-800 mb-6">Mark Attendance</h1>
+            {error && <div className="text-red-600 mb-4">{error}</div>}
+            {success && <div className="text-green-600 mb-4">{success}</div>}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <Webcam
+                    audio={false}
+                    ref={webcamRef}
+                    screenshotFormat="image/jpeg"
+                    className="mb-4 rounded-lg shadow-md"
+                />
+                <button
+                    onClick={markAttendance}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                >
+                    Mark Attendance
+                </button>
+                {location && (
+                    <div className="mt-4 text-gray-700">
+                        Location: {location.latitude}, {location.longitude}
+                    </div>
+                )}
+            </div>
+        </div>
     );
-  };
-
-  const retrainModel = async () => {
-    try {
-      const res = await axios.post('/api/attendance/train', {}, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-      alert(res.data.message || 'Model retrained');
-    } catch (err) {
-      console.error(err);
-      if (err.response?.status === 401) {
-        alert('Session expired. Please log in again to retrain the model.');
-      } else {
-        alert('Failed to retrain model');
-      }
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center p-4">
-      <Webcam
-        audio={false}
-        ref={webcamRef}
-        screenshotFormat="image/jpeg"
-        className="rounded-lg shadow-md"
-      />
-      <p className="mt-2 text-sm text-gray-600">{locationStatus}</p>
-      {loading && <p className="text-blue-500">Processing...</p>}
-      {error && (
-        <p className="text-red-500 text-sm">
-          {error}
-          {error.includes('Session expired') && (
-            <button 
-              onClick={() => window.location.href = '/login'}
-              className="ml-2 text-blue-500 underline"
-            >
-              Go to Login
-            </button>
-          )}
-        </p>
-      )}
-      {verificationStatus && <p className="text-green-600 font-semibold">{verificationStatus}</p>}
-
-      <button
-        onClick={captureAndVerify}
-        disabled={loading}
-        className={`mt-4 ${
-          loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
-        } text-white font-bold py-2 px-4 rounded`}
-      >
-        {loading ? 'Verifying...' : 'Verify Face'}
-      </button>
-
-      <button
-        onClick={retrainModel}
-        className="mt-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-      >
-        Retrain Model
-      </button>
-    </div>
-  );
 };
 
 export default AttendanceMarker;

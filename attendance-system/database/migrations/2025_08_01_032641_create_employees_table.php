@@ -9,7 +9,8 @@ return new class extends Migration {
     {
         Schema::create('employees', function (Blueprint $table) {
             $table->id();                      // e.g. 0, 1, 2, 3 matching folder labels
-            $table->string('name');            // employee name, e.g. 'employee_0'
+            $table->string('name');       // employee name, e.g. 'employee_0'
+            $table->string('email');     // e.g : employee@example.com 
             $table->string('position')->nullable(); // optional
             $table->timestamps();              // created_at, updated_at
         });

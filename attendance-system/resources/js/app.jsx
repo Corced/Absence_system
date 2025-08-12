@@ -1,37 +1,25 @@
-// resources/js/app.jsx
-import './bootstrap';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import axios from 'axios';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import AttendanceMarker from './components/AttendanceMarker';
+import AdminPanel from './components/AdminPanel';
 
 const App = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            setIsAuthenticated(true);
-        }
-        setLoading(false);
-    }, []);
-
-    if (loading) {
-        return <div className="flex justify-center items-center h-screen">Loading...</div>;
-    }
+    const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('auth_token'));
 
     return (
-        <BrowserRouter>
+        <Router>
             <Routes>
                 <Route
                     path="/login"
+                    element={<Login setIsAuthenticated={setIsAuthenticated} />}
+                />
+                <Route
+                    path="/"
                     element={
                         isAuthenticated ? (
-                            <Navigate to="/attendance" replace />
+                            <Navigate to={localStorage.getItem('role') === 'admin' ? '/admin' : '/attendance'} />
                         ) : (
                             <Login setIsAuthenticated={setIsAuthenticated} />
                         )
@@ -39,22 +27,15 @@ const App = () => {
                 />
                 <Route
                     path="/attendance"
-                    element={
-                        isAuthenticated ? (
-                            <AttendanceMarker />
-                        ) : (
-                            <Navigate to="/login" replace />
-                        )
-                    }
+                    element={isAuthenticated ? <AttendanceMarker /> : <Navigate to="/login" />}
                 />
                 <Route
-                    path="/"
-                    element={
-                        <Navigate to={isAuthenticated ? "/attendance" : "/login"} replace />
-                    }
+                    path="/admin"
+                    element={isAuthenticated ? <AdminPanel /> : <Navigate to="/login" />}
                 />
+                <Route path="*" element={<Navigate to="/" />} />
             </Routes>
-        </BrowserRouter>
+        </Router>
     );
 };
 
