@@ -9,3 +9,10 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+  .leaflet-div-icon {
+      background: transparent;
+      border: none;
+  }
+  .leaflet-marker-icon, .leaflet-marker-shadow {
+      display: block;
+  }

@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Webcam from 'react-webcam';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const AdminPanel = () => {
     const [attendances, setAttendances] = useState([]);
@@ -10,7 +12,16 @@ const AdminPanel = () => {
     const [selectedEmployee, setSelectedEmployee] = useState('');
     const [trainingImage, setTrainingImage] = useState(null);
     const webcamRef = useRef(null);
+    const mapRef = useRef(null);
     const navigate = useNavigate();
+
+    // Hospital locations and geofence radius
+    const hospitalLocations = [
+        { lat: -7.9901595, lon: 112.6205187 },
+        { lat: -7.9903000, lon: 112.6206000 },
+        { lat: -7.9900000, lon: 112.6207000 },
+    ];
+    const geofenceRadius = 20; // 20 meters
 
     useEffect(() => {
         const role = localStorage.getItem('role');
@@ -22,6 +33,10 @@ const AdminPanel = () => {
         const token = localStorage.getItem('auth_token');
         if (token) {
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            axios.get('http://localhost:8000/sanctum/csrf-cookie', { withCredentials: true })
+                .then(() => console.log('CSRF token fetched'));
+        } else {
+            navigate('/login');
         }
 
         fetchData();
@@ -40,15 +55,51 @@ const AdminPanel = () => {
         }
     };
 
+    useEffect(() => {
+        if (!loading && attendances.length > 0) {
+            // Initialize Leaflet map
+            if (!mapRef.current) {
+                mapRef.current = L.map('attendance-map').setView([-7.9901595, 112.6205187], 18);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                }).addTo(mapRef.current);
+
+                // Add hospital location markers and geofence circles
+                hospitalLocations.forEach(loc => {
+                    L.marker([loc.lat, loc.lon])
+                        .addTo(mapRef.current)
+                        .bindPopup('Hospital Location');
+                    L.circle([loc.lat, loc.lon], {
+                        radius: geofenceRadius,
+                        color: 'blue',
+                        fillOpacity: 0.2,
+                    }).addTo(mapRef.current);
+                });
+
+                // Add attendance markers
+                attendances.forEach(att => {
+                    L.marker([att.latitude, att.longitude])
+                        .addTo(mapRef.current)
+                        .bindPopup(
+                            `Employee: ${att.employee?.name || 'Unknown'}<br>` +
+                            `Time: ${att.attendance_time}<br>` +
+                            `Address: ${att.address}<br>` +
+                            `Distance: ${att.distance ? Math.round(att.distance) : 'N/A'}m`
+                        );
+                });
+            }
+        }
+    }, [attendances, loading]);
+
     const handleLogout = async () => {
         try {
             await axios.post('/api/logout');
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('role');
+            navigate('/login');
         } catch (err) {
             console.error('Logout failed:', err);
         }
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('role');
-        navigate('/login');
     };
 
     const handleTrainModel = async () => {
@@ -60,7 +111,7 @@ const AdminPanel = () => {
         try {
             const response = await axios.post('/api/attendance/train', {
                 employee_id: selectedEmployee,
-                image: trainingImage.split(',')[1], // Remove base64 prefix
+                image: trainingImage.split(',')[1],
             });
             alert(response.data.message);
             setTrainingImage(null);
@@ -174,44 +225,36 @@ const AdminPanel = () => {
 
             <section>
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Attendances</h2>
-                <div className="overflow-x-auto bg-white shadow-md rounded-lg">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Distance (m)</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {attendances.length > 0 ? (
-                                attendances.map((att) => (
-                                    <tr key={att.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{att.employee?.name || 'Unknown'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{att.attendance_time}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                            {att.address} ({att.latitude}, {att.longitude})
-                                            <br />
-                                            <a
-                                                href={`https://www.openstreetmap.org/?mlat=${att.latitude}&mlon=${att.longitude}#map=15/${att.latitude}/${att.longitude}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-blue-600 hover:underline"
-                                            >
-                                                View on Map
-                                            </a>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{att.distance ? Math.round(att.distance) : 'N/A'}</td>
-                                    </tr>
-                                ))
-                            ) : (
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <div id="attendance-map" style={{ height: '400px', width: '100%' }}></div>
+                    <div className="overflow-x-auto mt-4">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
                                 <tr>
-                                    <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">No attendances recorded</td>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee Name</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Distance (m)</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {attendances.length > 0 ? (
+                                    attendances.map((att) => (
+                                        <tr key={att.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{att.employee?.name || 'Unknown'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{att.attendance_time}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-900">{att.address} ({att.latitude}, {att.longitude})</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{att.distance ? Math.round(att.distance) : 'N/A'}</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">No attendances recorded</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
         </div>

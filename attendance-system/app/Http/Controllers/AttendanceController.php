@@ -17,8 +17,7 @@ class AttendanceController extends Controller
         ['lat' => -7.9903000, 'lon' => 112.6206000],
         ['lat' => -7.9900000, 'lon' => 112.6207000],
     ];
-    private $geofenceRadius = 2000;
-
+    private $geofenceRadius = 1000; // 20 meters, as previously updated
 
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
     {
@@ -43,6 +42,13 @@ class AttendanceController extends Controller
         $closestDistance = PHP_FLOAT_MAX;
         foreach ($this->hospitalLocations as $location) {
             $distance = $this->calculateDistance($lat, $lon, $location['lat'], $location['lon']);
+            Log::info('Geofence check', [
+                'lat' => $lat,
+                'lon' => $lon,
+                'hospital_lat' => $location['lat'],
+                'hospital_lon' => $location['lon'],
+                'distance' => $distance,
+            ]);
             $closestDistance = min($closestDistance, $distance);
             if ($distance <= $this->geofenceRadius) {
                 return [true, $distance];
@@ -58,6 +64,7 @@ class AttendanceController extends Controller
             $response = $client->get("https://nominatim.openstreetmap.org/reverse?format=json&lat={$lat}&lon={$lon}");
             $data = json_decode($response->getBody(), true);
             $address = $data['display_name'] ?? 'Unknown location';
+            Log::info('Geocoding result', ['lat' => $lat, 'lon' => $lon, 'address' => $address]);
 
             if (stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') === false &&
                 stripos($address, 'S. Supriadi') === false) {
@@ -152,13 +159,12 @@ class AttendanceController extends Controller
     {
         $request->validate([
             'employee_id' => 'required|exists:employees,id',
-            'image' => 'required|string', // Base64-encoded image
+            'image' => 'required|string',
         ]);
 
         $employeeId = $request->input('employee_id');
         $imageData = $request->input('image');
 
-        // Save image temporarily for facial recognition service
         $imageBinary = base64_decode($imageData);
         if (!$imageBinary) {
             return response()->json(['error' => 'Invalid base64 image data'], 422);
@@ -184,14 +190,14 @@ class AttendanceController extends Controller
                 ],
             ]);
 
-            Storage::disk('local')->delete($tempPath); // Clean up
+            Storage::disk('local')->delete($tempPath);
 
             $data = json_decode($response->getBody(), true);
             return response()->json([
                 'message' => $data['message'] ?? "Training complete for employee_{$employeeId}",
             ]);
         } catch (\Exception $e) {
-            Storage::disk('local')->delete($tempPath); // Clean up on error
+            Storage::disk('local')->delete($tempPath);
             Log::error('Model training failed for employee: ' . $employeeId, ['error' => $e->getMessage()]);
             return response()->json([
                 'error' => 'Failed to trigger model training: ' . $e->getMessage(),
@@ -210,20 +216,9 @@ class AttendanceController extends Controller
 
         foreach ($attendances as $att) {
             if (!$att->address || stripos($att->address, 'Unable to retrieve') !== false) {
-                try {
-                    $response = $client->get("https://nominatim.openstreetmap.org/reverse?format=json&lat={$att->latitude}&lon={$att->longitude}");
-                    $data = json_decode($response->getBody(), true);
-                    $address = $data['display_name'] ?? 'Unknown location';
-                    $att->address = stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') !== false ||
-                                    stripos($address, 'S. Supriadi') !== false
-                        ? $address
-                        : 'Location not at Rumah Sakit Tentara Dokter Soepraoen';
-                    $att->save();
-                    sleep(1);
-                } catch (\Exception $e) {
-                    $att->address = 'Unable to retrieve location';
-                    Log::warning('Geocoding failed for lat: ' . $att->latitude . ', lon: ' . $att->longitude, ['error' => $e->getMessage()]);
-                }
+                $att->address = $this->getAddress($att->latitude, $att->longitude);
+                $att->save();
+                sleep(1); // Respect Nominatim rate limits
             }
             if (is_null($att->distance)) {
                 [$isWithinGeofence, $distance] = $this->isWithinGeofence($att->latitude, $att->longitude);
