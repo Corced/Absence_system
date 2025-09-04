@@ -1,61 +1,194 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Sistem Absensi dengan Pengenalan Wajah dan GPS
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistem absensi modern yang menggunakan teknologi pengenalan wajah (Face Recognition) dan GPS untuk memastikan kehadiran karyawan di area Rumah Sakit Tentara Dokter Soepraoen.
 
-## About Laravel
+## 🚀 Fitur Utama
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+### 👤 Pengenalan Wajah
+- Sistem AI yang dapat mengenali wajah karyawan
+- Pelatihan model untuk karyawan baru
+- Keamanan tinggi dengan verifikasi biometrik
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 📍 Verifikasi Lokasi
+- GPS tracking untuk memastikan kehadiran di area rumah sakit
+- Geofencing dengan radius 1000 meter
+- Validasi alamat otomatis
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 👨‍💼 Panel Admin
+- Dashboard dengan statistik kehadiran
+- Manajemen data karyawan
+- Riwayat kehadiran lengkap
+- Pelatihan model AI
 
-## Learning Laravel
+### 📱 Antarmuka Responsif
+- Desain modern dan mudah digunakan
+- Bahasa Indonesia
+- Kompatibel dengan semua perangkat
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 🛠️ Teknologi yang Digunakan
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Backend
+- **Laravel 11** - Framework PHP modern
+- **MySQL** - Database relasional
+- **Laravel Sanctum** - Autentikasi API
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Frontend
+- **React 18** - Library JavaScript
+- **Tailwind CSS** - Framework CSS utility-first
+- **Axios** - HTTP client
 
-## Laravel Sponsors
+### AI & Machine Learning
+- **Python Flask API** - Backend untuk pengenalan wajah
+- **OpenCV** - Computer vision
+- **Face Recognition** - Library pengenalan wajah
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## 📋 Persyaratan Sistem
 
-### Premium Partners
+- PHP 8.1+
+- Node.js 18+
+- MySQL 8.0+
+- Python 3.8+
+- Webcam untuk pengenalan wajah
+- GPS untuk verifikasi lokasi
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## 🚀 Cara Instalasi
 
-## Contributing
+### 1. Clone Repository
+```bash
+git clone [repository-url]
+cd attendance-system
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 2. Install Dependencies Backend
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-## Code of Conduct
+### 3. Setup Database
+```bash
+php artisan migrate
+php artisan db:seed
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 4. Install Dependencies Frontend
+```bash
+npm install
+npm run build
+```
 
-## Security Vulnerabilities
+### 5. Setup Python API
+```bash
+cd flask-api
+pip install -r requirements.txt
+python app.py
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 6. Jalankan Laravel
+```bash
+php artisan serve
+```
 
-## License
+## 📱 Cara Penggunaan
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Untuk Karyawan
+1. **Login** dengan email dan password
+2. **Izinkan akses kamera** dan lokasi
+3. **Posisikan wajah** di depan kamera
+4. **Klik "Catat Kehadiran"**
+5. **Tunggu konfirmasi** kehadiran berhasil
+
+### Untuk Admin
+1. **Login** dengan akun admin
+2. **Dashboard** - Lihat statistik kehadiran
+3. **Data Kehadiran** - Riwayat kehadiran karyawan
+4. **Karyawan** - Kelola data karyawan
+5. **Pelatihan** - Latih model AI untuk karyawan baru
+
+## 🔒 Keamanan
+
+- **Autentikasi Multi-Faktor** dengan token
+- **Validasi Lokasi** dengan GPS dan geofencing
+- **Verifikasi Wajah** untuk mencegah kecurangan
+- **Log Aktivitas** lengkap untuk audit
+
+## 📊 Struktur Database
+
+### Tabel Utama
+- `users` - Data pengguna sistem
+- `employees` - Data karyawan
+- `attendances` - Data kehadiran
+
+### Relasi
+- User → Employee (One-to-One)
+- Employee → Attendance (One-to-Many)
+
+## 🌐 API Endpoints
+
+### Autentikasi
+- `POST /api/login` - Login pengguna
+- `POST /api/logout` - Logout pengguna
+
+### Kehadiran
+- `POST /api/attendance/mark` - Catat kehadiran
+- `GET /api/attendance` - Ambil data kehadiran
+- `POST /api/attendance/train` - Latih model AI
+
+### Karyawan
+- `GET /api/employees` - Ambil data karyawan
+
+## 🎯 Fitur Khusus
+
+### Geofencing
+- Radius 1000 meter dari lokasi rumah sakit
+- Koordinat: -7.9901595, 112.6205187
+- Validasi otomatis lokasi kehadiran
+
+### Pengenalan Wajah
+- Model AI yang dapat dilatih
+- Akurasi tinggi dengan dataset berkualitas
+- Pelatihan berkelanjutan untuk performa optimal
+
+## 📈 Monitoring & Analytics
+
+- **Statistik Kehadiran** real-time
+- **Laporan Harian** kehadiran karyawan
+- **Analisis Tren** kehadiran
+- **Dashboard Interaktif** untuk admin
+
+## 🐛 Troubleshooting
+
+### Masalah Umum
+1. **Kamera tidak berfungsi** - Pastikan izin kamera diaktifkan
+2. **GPS tidak terdeteksi** - Periksa izin lokasi browser
+3. **Login gagal** - Verifikasi kredensial dan koneksi database
+4. **Model AI error** - Restart Python Flask API
+
+### Log & Debug
+- Log Laravel: `storage/logs/laravel.log`
+- Log Python: Console output Flask API
+- Browser Console: Error JavaScript
+
+## 🤝 Kontribusi
+
+1. Fork repository
+2. Buat branch fitur baru
+3. Commit perubahan
+4. Push ke branch
+5. Buat Pull Request
+
+## 📄 Lisensi
+
+Proyek ini dilisensikan di bawah [MIT License](LICENSE).
+
+## 📞 Kontak
+
+Untuk pertanyaan atau dukungan teknis:
+- Email: [email@example.com]
+- Telepon: [nomor-telepon]
+- Alamat: Rumah Sakit Tentara Dokter Soepraoen
+
+---
+
+**Dikembangkan dengan ❤️ untuk RST Dokter Soepraoen**

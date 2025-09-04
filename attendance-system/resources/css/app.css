@@ -16,3 +16,122 @@
   .leaflet-marker-icon, .leaflet-marker-shadow {
       display: block;
   }
+
+  /* Custom DatePicker Styles */
+  .react-datepicker-wrapper {
+      width: 100%;
+  }
+  
+  .react-datepicker__input-container input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+  }
+  
+  .react-datepicker__input-container input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+/* Custom styles for Indonesian UI */
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Smooth transitions */
+.transition-all {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Custom button hover effects */
+.btn-hover {
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Custom focus styles */
+.focus-ring:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #3b82f6;
+    ring-offset: 2px;
+}
+
+/* Loading animation */
+@keyframes pulse-slow {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.animate-pulse-slow {
+    animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Table hover effects */
+.table-row-hover:hover {
+    background-color: #f8fafc;
+}
+
+/* Card shadows */
+.card-shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.card-shadow-hover:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.no-oklch-colors,
+.no-oklch-colors * {
+  color: #374151 !important; /* Equivalent to text-gray-900 */
+  background-color: #ffffff !important; /* Equivalent to bg-white */
+  border-color: #e5e7eb !important; /* Equivalent to border-gray-200 */
+}
+
+.no-oklch-colors thead {
+  background-color: #f9fafb !important; /* Equivalent to bg-gray-50 */
+}
+
+.no-oklch-colors .bg-green-100 {
+  background-color: #d1fae5 !important; /* Equivalent to bg-green-100 */
+  color: #065f46 !important; /* Equivalent to text-green-800 */
+}
+
+.no-oklch-colors .bg-red-100 {
+  background-color: #fee2e2 !important; /* Equivalent to bg-red-100 */
+  color: #991b1b !important; /* Equivalent to text-red-800 */
+}
+
+.no-oklch-colors .hover\:bg-gray-50:hover {
+  background-color: #f9fafb !important; /* Equivalent to hover:bg-gray-50 */
+}

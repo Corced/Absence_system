@@ -67,14 +67,14 @@ class AttendanceController extends Controller
             Log::info('Geocoding result', ['lat' => $lat, 'lon' => $lon, 'address' => $address]);
 
             if (stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') === false &&
-                stripos($address, 'S. Supriadi') === false) {
-                return 'Location not at Rumah Sakit Tentara Dokter Soepraoen';
+                stripos($address, 'S. Soepraoen') === false) {
+                return 'Area Rumah Sakit Tentara Dokter Soepraoen';
             }
 
             return $address;
         } catch (\Exception $e) {
             Log::warning('Geocoding failed for lat: ' . $lat . ', lon: ' . $lon, ['error' => $e->getMessage()]);
-            return 'Unable to retrieve location';
+            return 'Tidak dapat menentukan lokasi';
         }
     }
 
@@ -93,7 +93,7 @@ class AttendanceController extends Controller
         [$isWithinGeofence, $distance] = $this->isWithinGeofence($latitude, $longitude);
         if (!$isWithinGeofence) {
             return response()->json([
-                'error' => 'You are outside the hospital premises. Closest distance: ' . round($distance, 2) . ' meters'
+                'error' => 'Kamu berada di luar jangkauan Rumah sakit. Jarak terdekat: ' . round($distance, 2) . ' meter'
             ], 403);
         }
 
@@ -133,7 +133,7 @@ class AttendanceController extends Controller
 
                 $address = $this->getAddress($latitude, $longitude);
                 if (stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') === false &&
-                    stripos($address, 'S. Supriadi') === false) {
+                    stripos($address, 'S. Soepraoen') === false) {
                     return response()->json(['error' => 'Location not at Rumah Sakit Tentara Dokter Soepraoen'], 403);
                 }
 
@@ -238,5 +238,21 @@ class AttendanceController extends Controller
 
         $employees = Employee::all();
         return response()->json($employees);
+    }
+
+    public function getMyAttendances()
+    {
+        $user = Auth::user();
+        $employee = Employee::where('user_id', $user->id)->first();
+        
+        if (!$employee) {
+            return response()->json(['error' => 'Employee not found'], 404);
+        }
+
+        $attendances = Attendance::where('employee_id', $employee->id)
+            ->orderBy('attendance_time', 'desc')
+            ->get();
+
+        return response()->json($attendances);
     }
 }
