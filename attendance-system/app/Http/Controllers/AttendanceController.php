@@ -78,82 +78,112 @@ class AttendanceController extends Controller
         }
     }
 
-    public function markAttendance(Request $request)
-    {
-        $request->validate([
-            'image' => 'required|string',
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
+public function markAttendance(Request $request)
+{
+    $request->validate([
+        'image' => 'required|string',
+        'latitude' => 'required|numeric|between:-90,90',
+        'longitude' => 'required|numeric|between:-180,180',
+    ]);
+
+    $imageData = $request->input('image');
+    $latitude = $request->input('latitude');
+    $longitude = $request->input('longitude');
+
+    [$isWithinGeofence, $distance] = $this->isWithinGeofence($latitude, $longitude);
+    if (!$isWithinGeofence) {
+        return response()->json([
+            'error' => 'Kamu berada di luar jangkauan Rumah sakit. Jarak terdekat: ' . round($distance, 2) . ' meter'
+        ], 403);
+    }
+
+    $client = new Client();
+
+    try {
+        $imageBinary = base64_decode($imageData);
+        if (!$imageBinary) {
+            return response()->json(['error' => 'Invalid base64 image data'], 422);
+        }
+
+        $response = $client->post('http://localhost:5000/recognize', [
+            'multipart' => [
+                [
+                    'name' => 'image',
+                    'contents' => $imageBinary,
+                    'filename' => 'webcam.jpg',
+                ],
+            ],
         ]);
 
-        $imageData = $request->input('image');
-        $latitude = $request->input('latitude');
-        $longitude = $request->input('longitude');
+        $data = json_decode($response->getBody(), true);
 
-        [$isWithinGeofence, $distance] = $this->isWithinGeofence($latitude, $longitude);
-        if (!$isWithinGeofence) {
-            return response()->json([
-                'error' => 'Kamu berada di luar jangkauan Rumah sakit. Jarak terdekat: ' . round($distance, 2) . ' meter'
-            ], 403);
-        }
+        if (isset($data['identity'])) {
+            $identity = $data['identity'];
+            $employeeId = (int) str_replace('employee_', '', $identity);
+            $employee = Employee::find($employeeId);
 
-        $client = new Client();
-
-        try {
-            $imageBinary = base64_decode($imageData);
-            if (!$imageBinary) {
-                return response()->json(['error' => 'Invalid base64 image data'], 422);
+            if (!$employee) {
+                return response()->json(['error' => 'Employee not found'], 404);
             }
 
-            $response = $client->post('http://localhost:5000/recognize', [
-                'multipart' => [
-                    [
-                        'name' => 'image',
-                        'contents' => $imageBinary,
-                        'filename' => 'webcam.jpg',
-                    ],
-                ],
+            $user = Auth::user();
+            if ($employee->user_id !== $user->id) {
+                return response()->json(['error' => 'Unauthorized: Face does not match logged-in user'], 403);
+            }
+
+            $shift = $employee->shift;
+
+            // Check if shift is null and handle accordingly
+            if (!$shift) {
+                return response()->json([
+                    'error' => '❌ Gagal absen: Shift tidak ditemukan untuk karyawan ini!'
+                ], 403);
+            }
+
+            // Additional layer: Check if shift matches current timezone
+            $tz = new \DateTimeZone('Asia/Jakarta');
+            $currentTime = new \DateTime('now', $tz);
+            $shiftStart = new \DateTime($shift->start_time, $tz);
+            $shiftEnd = new \DateTime($shift->end_time, $tz);
+
+            // Handle overnight shifts
+            if ($shiftEnd < $shiftStart) {
+                if ($currentTime < $shiftStart) {
+                    $shiftEnd->modify('-1 day');
+                } else {
+                    $shiftStart->modify('+1 day');
+                }
+            }
+
+            if ($currentTime < $shiftStart || $currentTime > $shiftEnd) {
+                return response()->json([
+                    'error' => '❌ Gagal absen: Jam shift Anda tidak sesuai dengan waktu saat ini!'
+                ], 403);
+            }
+
+            $address = $this->getAddress($latitude, $longitude);
+            if (stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') === false &&
+                stripos($address, 'S. Soepraoen') === false) {
+                return response()->json(['error' => 'Location not at Rumah Sakit Tentara Dokter Soepraoen'], 403);
+            }
+
+            Attendance::create([
+                'employee_id' => $employee->id,
+                'attendance_time' => now(),
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'address' => $address,
+                'distance' => $distance,
             ]);
-
-            $data = json_decode($response->getBody(), true);
-
-            if (isset($data['identity'])) {
-                $identity = $data['identity'];
-                $employeeId = (int) str_replace('employee_', '', $identity);
-                $employee = Employee::find($employeeId);
-
-                if (!$employee) {
-                    return response()->json(['error' => 'Employee not found'], 404);
-                }
-
-                $user = Auth::user();
-                if ($employee->user_id !== $user->id) {
-                    return response()->json(['error' => 'Unauthorized: Face does not match logged-in user'], 403);
-                }
-
-                $address = $this->getAddress($latitude, $longitude);
-                if (stripos($address, 'Rumah Sakit Tentara Dokter Soepraoen') === false &&
-                    stripos($address, 'S. Soepraoen') === false) {
-                    return response()->json(['error' => 'Location not at Rumah Sakit Tentara Dokter Soepraoen'], 403);
-                }
-
-                Attendance::create([
-                    'employee_id' => $employee->id,
-                    'attendance_time' => now(),
-                    'latitude' => $latitude,
-                    'longitude' => $longitude,
-                    'address' => $address,
-                    'distance' => $distance,
-                ]);
-                return response()->json(['message' => 'Attendance marked successfully']);
-            } else {
-                return response()->json(['error' => 'No match found'], 404);
-            }
-        } catch (\Exception $e) {
-            Log::error('Recognition failed for user: ' . Auth::id(), ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Recognition failed: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Attendance marked successfully']);
+        } else {
+            return response()->json(['error' => 'No match found'], 404);
         }
+    } catch (\Exception $e) {
+        Log::error('Recognition failed for user: ' . Auth::id(), ['error' => $e->getMessage()]);
+        return response()->json(['error' => 'Recognition failed: ' . $e->getMessage()], 500);
     }
+}
 
     public function trainModel(Request $request)
     {

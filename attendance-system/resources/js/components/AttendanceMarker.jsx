@@ -40,48 +40,51 @@ const AttendanceMarker = () => {
         }
     }, [navigate]);
 
-    const markAttendance = async () => {
-        if (!webcamRef.current || !location) {
-            setError('Kamera atau lokasi tidak tersedia.');
-            return;
+const markAttendance = async () => {
+    if (!webcamRef.current || !location) {
+        setError('Kamera atau lokasi tidak tersedia.');
+        return;
+    }
+
+    const imageSrc = webcamRef.current.getScreenshot();
+    if (!imageSrc) {
+        setError('Gagal mengambil gambar.');
+        return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+        const response = await axios.post('http://localhost:8000/api/attendance/mark', {
+            image: imageSrc.split(',')[1], // Remove base64 prefix
+            latitude: location.latitude,
+            longitude: location.longitude,
+        });
+
+        setSuccess(response.data.message);
+    } catch (err) {
+        console.log('Full error response:', err.response);
+        const errorMessage = err.response?.data?.error || '';
+        if (errorMessage.includes('No face detected')) {
+            setError('Wajah tidak terdeteksi. Pastikan wajah Anda terlihat jelas di depan kamera.');
+        } else if (errorMessage.includes('No match found')) {
+            setError('Wajah tidak cocok. Silakan coba lagi.');
+        } else if (errorMessage.includes('Recognition failed')) {
+            setError('Gagal mengenali wajah. Pastikan pencahayaan cukup dan wajah terlihat jelas.');
+        } else if (errorMessage.includes('Shift tidak ditemukan')) {
+            setError('❌ Gagal absen: Shift tidak ditemukan untuk karyawan ini!');
+        } else if (errorMessage.includes('Jam shift Anda tidak sesuai')) {
+            setError('❌ Gagal absen: Jam shift Anda tidak sesuai dengan waktu saat ini!');
+        } else {
+            setError(errorMessage || 'Gagal mencatat kehadiran.');
         }
-
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (!imageSrc) {
-            setError('Gagal mengambil gambar.');
-            return;
-        }
-
-        setLoading(true);
-        setError('');
-        setSuccess('');
-
-        try {
-            const response = await axios.post('http://localhost:8000/api/attendance/mark', {
-                image: imageSrc.split(',')[1], // Remove base64 prefix
-                latitude: location.latitude,
-                longitude: location.longitude,
-            });
-
-            setSuccess(response.data.message);
-        } catch (err) {
-            // Check for specific face recognition errors
-            const errorMessage = err.response?.data?.error || '';
-            
-            if (errorMessage.includes('No face detected')) {
-                setError('Wajah tidak terdeteksi. Pastikan wajah Anda terlihat jelas di depan kamera.');
-            } else if (errorMessage.includes('No match found')) {
-                setError('Wajah tidak cocok. Silakan coba lagi.');
-            } else if (errorMessage.includes('Recognition failed')) {
-                setError('Gagal mengenali wajah. Pastikan pencahayaan cukup dan wajah terlihat jelas.');
-            } else {
-                setError(err.response?.data?.error || 'Gagal mencatat kehadiran.');
-            }
-            console.error('Attendance marking failed:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+        console.error('Attendance marking failed:', err);
+    } finally {
+        setLoading(false);
+    }
+};
 
     const handleLogout = () => {
         localStorage.removeItem('auth_token');
