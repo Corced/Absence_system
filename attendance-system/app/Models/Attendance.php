@@ -11,6 +11,9 @@ class Attendance extends Model
         'attendance_time',
         'latitude',
         'longitude',
+        'address',
+        'distance',
+        'clock_out_time',
     ];
 
     public function employee()

@@ -9,6 +9,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/attendance/mark', [AttendanceController::class, 'markAttendance']);
+    Route::post('/attendance/clock-out', [AttendanceController::class, 'clockOut']);
     Route::post('/attendance/train', [AttendanceController::class, 'trainModel']);
     Route::get('/attendance', [AttendanceController::class, 'getAttendances']);
     Route::get('/attendance/my', [AttendanceController::class, 'getMyAttendances']);

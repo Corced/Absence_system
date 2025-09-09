@@ -49,6 +49,7 @@ const AdminPanel = () => {
     const [mapInitialized, setMapInitialized] = useState(false);
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [calendarView, setCalendarView] = useState('month');
+    const [statusFilter, setStatusFilter] = useState('all');
     const webcamRef = useRef(null);
     const mapRef = useRef(null);
     const attendanceTableRef = useRef(null);
@@ -189,16 +190,37 @@ const AdminPanel = () => {
         }
     };
 
+    const formatDuration = (startIso, endIso) => {
+        if (!startIso || !endIso) return '-';
+        const start = new Date(startIso);
+        const end = new Date(endIso);
+        const diffMs = Math.max(0, end - start);
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours}j ${minutes}m`;
+    };
+
+    const filteredAttendances = attendances.filter(att => {
+        if (statusFilter === 'clocked_out') return !!att.clock_out_time;
+        if (statusFilter === 'open') return !att.clock_out_time;
+        return true;
+    });
+
     const exportToExcel = () => {
-        const data = attendances.map(att => ({
+        const data = filteredAttendances.map(att => ({
             'Nama': employees.find(emp => emp.id === att.employee_id)?.name || 'Tidak diketahui',
-            'Tanggal': new Date(att.attendance_time).toLocaleDateString('id-ID'),
-            'Waktu': new Date(att.attendance_time).toLocaleTimeString('id-ID'),
+            'Clock In Tanggal': new Date(att.attendance_time).toLocaleDateString('id-ID'),
+            'Clock In Waktu': new Date(att.attendance_time).toLocaleTimeString('id-ID'),
+            'Clock Out Tanggal': att.clock_out_time ? new Date(att.clock_out_time).toLocaleDateString('id-ID') : '-',
+            'Clock Out Waktu': att.clock_out_time ? new Date(att.clock_out_time).toLocaleTimeString('id-ID') : '-',
+            'Durasi': att.clock_out_time ? formatDuration(att.attendance_time, att.clock_out_time) : '-',
             'Lokasi': att.address || 'Tidak tersedia',
             'Latitude': att.latitude || '-',
             'Longitude': att.longitude || '-',
             'Jarak (m)': att.distance ? Math.round(att.distance) : '-',
-            'Status': att.distance && att.distance <= geofenceRadius ? 'Hadir di dalam Area' : 'Di luar area'
+            'Status Area': att.distance && att.distance <= geofenceRadius ? 'Dalam Area' : 'Di Luar Area',
+            'Status Clock Out': att.clock_out_time ? 'Sudah Clock Out' : 'Belum Clock Out'
         }));
 
         const ws = XLSX.utils.json_to_sheet(data);
@@ -207,13 +229,17 @@ const AdminPanel = () => {
         
         const colWidths = [
             { wch: 20 }, // Nama
-            { wch: 15 }, // Tanggal
-            { wch: 10 }, // Waktu
+            { wch: 15 }, // Clock In Tanggal
+            { wch: 12 }, // Clock In Waktu
+            { wch: 17 }, // Clock Out Tanggal
+            { wch: 12 }, // Clock Out Waktu
+            { wch: 10 }, // Durasi
             { wch: 40 }, // Lokasi
             { wch: 12 }, // Latitude
             { wch: 12 }, // Longitude
             { wch: 10 }, // Jarak
-            { wch: 15 }  // Status
+            { wch: 15 }, // Status Area
+            { wch: 16 }  // Status Clock Out
         ];
         ws['!cols'] = colWidths;
 
@@ -882,12 +908,21 @@ const AdminPanel = () => {
       <h2 className="text-xl font-bold text-gray-800">Data Kehadiran</h2>
       <p className="text-gray-600 mt-1">Riwayat kehadiran semua karyawan</p>
     </div>
-    <div className="flex space-x-3">
+    <div className="flex space-x-3 items-center">
+      <select
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value)}
+        className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700"
+      >
+        <option value="all">Semua</option>
+        <option value="open">Belum Clock Out</option>
+        <option value="clocked_out">Sudah Clock Out</option>
+      </select>
       <button
         onClick={exportToExcel}
-        disabled={attendances.length === 0}
+        disabled={filteredAttendances.length === 0}
         className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
-          attendances.length === 0
+          filteredAttendances.length === 0
             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
             : 'bg-green-600 text-white hover:bg-green-700'
         }`}
@@ -899,9 +934,9 @@ const AdminPanel = () => {
       </button>
       <button
         onClick={exportToPDF}
-        disabled={attendances.length === 0}
+        disabled={filteredAttendances.length === 0}
         className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
-          attendances.length === 0
+          filteredAttendances.length === 0
             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
             : 'bg-red-600 text-white hover:bg-red-700'
         }`}
@@ -918,14 +953,17 @@ const AdminPanel = () => {
       <thead className="bg-gray-50">
         <tr>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Waktu</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clock In</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clock Out</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durasi</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lokasi</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jarak</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Area</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Clock Out</th>
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
-        {attendances.slice(0, 20).map((attendance, index) => {
+        {filteredAttendances.slice(0, 50).map((attendance, index) => {
           const isWithinGeofence = attendance.distance && attendance.distance <= geofenceRadius;
           return (
             <tr key={index} className="hover:bg-gray-50">
@@ -934,6 +972,12 @@ const AdminPanel = () => {
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {new Date(attendance.attendance_time).toLocaleString('id-ID')}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {attendance.clock_out_time ? new Date(attendance.clock_out_time).toLocaleString('id-ID') : '-'}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {attendance.clock_out_time ? formatDuration(attendance.attendance_time, attendance.clock_out_time) : '-'}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {attendance.address || 'Tidak tersedia'}
@@ -947,7 +991,16 @@ const AdminPanel = () => {
                     ? 'bg-green-100 text-green-800' 
                     : 'bg-red-100 text-red-800'
                 }`}>
-                  {isWithinGeofence ? '✓ Hadir di dalam area' : '✗ Di luar area'}
+                  {isWithinGeofence ? '✓ Dalam area' : '✗ Di luar area'}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  attendance.clock_out_time
+                    ? 'bg-indigo-100 text-indigo-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {attendance.clock_out_time ? 'Sudah Clock Out' : 'Belum Clock Out'}
                 </span>
               </td>
             </tr>
