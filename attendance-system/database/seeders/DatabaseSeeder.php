@@ -16,6 +16,7 @@ public function run()
             ShiftSeeder::class,
             AttendancesTableSeeder::class,
             EmployeesTableSeeder::class,
+            UsersAndEmployeesSeeder::class,
         ]);
     }
 }
