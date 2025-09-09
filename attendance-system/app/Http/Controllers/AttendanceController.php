@@ -37,6 +37,30 @@ class AttendanceController extends Controller
         return $earthRadius * $c;
     }
 
+    public function clockOut(Request $request)
+    {
+        $user = Auth::user();
+        $employee = Employee::where('user_id', $user->id)->first();
+
+        if (!$employee) {
+            return response()->json(['error' => 'Employee not found'], 404);
+        }
+
+        $attendance = Attendance::where('employee_id', $employee->id)
+            ->whereNull('clock_out_time')
+            ->latest('attendance_time')
+            ->first();
+
+        if (!$attendance) {
+            return response()->json(['error' => 'No active attendance to clock out'], 404);
+        }
+
+        $attendance->clock_out_time = now();
+        $attendance->save();
+
+        return response()->json(['message' => 'Clock out recorded successfully']);
+    }
+
     private function isWithinGeofence($lat, $lon)
     {
         $closestDistance = PHP_FLOAT_MAX;
