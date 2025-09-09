@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\Shift;
+use App\Models\EmployeeShiftAssignment;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -155,31 +157,46 @@ public function markAttendance(Request $request)
                 return response()->json(['error' => 'Unauthorized: Face does not match logged-in user'], 403);
             }
 
-            $shift = $employee->shift;
+            // Determine today's assigned shift. Prefer explicit assignment for the date; fallback to employee default shift_id
+            $tz = new \DateTimeZone('Asia/Jakarta');
+            $todayDate = (new \DateTime('now', $tz))->format('Y-m-d');
 
-            // Check if shift is null and handle accordingly
+            $assignment = EmployeeShiftAssignment::where('employee_id', $employee->id)
+                ->where('date', $todayDate)
+                ->with('shift')
+                ->first();
+
+            $shift = $assignment->shift ?? $employee->shift;
+
             if (!$shift) {
                 return response()->json([
                     'error' => '❌ Gagal absen: Shift tidak ditemukan untuk karyawan ini!'
                 ], 403);
             }
 
-            // Additional layer: Check if shift matches current timezone
-            $tz = new \DateTimeZone('Asia/Jakarta');
+            // Block attendance if this is an OFF/holiday shift (00:00-00:00)
+            if ($shift->start_time === $shift->end_time) {
+                return response()->json([
+                    'error' => '❌ Hari ini adalah libur/shift off. Tidak dapat absen.'
+                ], 403);
+            }
+
+            // Validate current time within shift window, including overnight shifts
             $currentTime = new \DateTime('now', $tz);
             $shiftStart = new \DateTime($shift->start_time, $tz);
             $shiftEnd = new \DateTime($shift->end_time, $tz);
 
-            // Handle overnight shifts
+            // If end < start, the shift is overnight
             if ($shiftEnd < $shiftStart) {
-                if ($currentTime < $shiftStart) {
-                    $shiftEnd->modify('-1 day');
-                } else {
-                    $shiftStart->modify('+1 day');
-                }
+                $end = (clone $shiftEnd)->modify('+1 day');
+                $windowStart = (clone $shiftStart);
+                // Allow attendance if time is after start or before end next day
+                $inWindow = ($currentTime >= $windowStart) || ($currentTime <= $end);
+            } else {
+                $inWindow = ($currentTime >= $shiftStart && $currentTime <= $shiftEnd);
             }
 
-            if ($currentTime < $shiftStart || $currentTime > $shiftEnd) {
+            if (!$inWindow) {
                 return response()->json([
                     'error' => '❌ Gagal absen: Jam shift Anda tidak sesuai dengan waktu saat ini!'
                 ], 403);

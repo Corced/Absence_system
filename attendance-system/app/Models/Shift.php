@@ -7,6 +7,7 @@
   class Shift extends Model
   {
       protected $fillable = [
+          'code',
           'name',
           'start_time',
           'end_time',
@@ -16,5 +17,10 @@
       public function employees()
       {
           return $this->hasMany(Employee::class);
+      }
+
+      public function assignments()
+      {
+          return $this->hasMany(EmployeeShiftAssignment::class);
       }
   }
