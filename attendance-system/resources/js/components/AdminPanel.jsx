@@ -220,7 +220,8 @@ const AdminPanel = () => {
             'Longitude': att.longitude || '-',
             'Jarak (m)': att.distance ? Math.round(att.distance) : '-',
             'Status Area': att.distance && att.distance <= geofenceRadius ? 'Dalam Area' : 'Di Luar Area',
-            'Status Clock Out': att.clock_out_time ? 'Sudah Clock Out' : 'Belum Clock Out'
+            'Status Clock Out': att.clock_out_time ? 'Sudah Clock Out' : 'Belum Clock Out',
+            'NIP': employees.find(emp => emp.id === att.employee_id)?.nip || '-',
         }));
 
         const ws = XLSX.utils.json_to_sheet(data);
@@ -239,7 +240,8 @@ const AdminPanel = () => {
             { wch: 12 }, // Longitude
             { wch: 10 }, // Jarak
             { wch: 15 }, // Status Area
-            { wch: 16 }  // Status Clock Out
+            { wch: 16 },  // Status Clock Out
+            { wch: 16 }, // NIP
         ];
         ws['!cols'] = colWidths;
 
@@ -960,6 +962,7 @@ const AdminPanel = () => {
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jarak</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Area</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Clock Out</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NIP</th>
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
@@ -1002,6 +1005,9 @@ const AdminPanel = () => {
                 }`}>
                   {attendance.clock_out_time ? 'Sudah Clock Out' : 'Belum Clock Out'}
                 </span>
+              </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                {employees.find(emp => emp.id === attendance.employee_id)?.nip || '-'}
               </td>
             </tr>
           );

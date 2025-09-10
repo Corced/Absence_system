@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Shift;
 
-class ShiftsTableSeeder extends Seeder
+class ShiftSeeder extends Seeder
 {
     public function run()
     {
