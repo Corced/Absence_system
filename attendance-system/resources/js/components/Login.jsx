@@ -3,8 +3,10 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const Login = ({ setIsAuthenticated }) => {
+    const [nip, setNip] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [useEmail, setUseEmail] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
@@ -15,10 +17,8 @@ const Login = ({ setIsAuthenticated }) => {
         setError('');
 
         try {
-            const response = await axios.post('/api/login', {
-                email,
-                password,
-            });
+            const payload = useEmail ? { email, password } : { nip, password };
+            const response = await axios.post('/api/login', payload);
 
             localStorage.setItem('auth_token', response.data.access_token);
             localStorage.setItem('role', response.data.role);
@@ -66,22 +66,41 @@ const Login = ({ setIsAuthenticated }) => {
                     )}
 
                     <form className="space-y-6" onSubmit={handleSubmit}>
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                                Email
-                            </label>
-                            <input
-                                id="email"
-                                name="email"
-                                type="email"
-                                autoComplete="email"
-                                required
-                                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                                placeholder="Masukkan email Anda"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                            />
-                        </div>
+                        {useEmail ? (
+                            <div>
+                                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Email
+                                </label>
+                                <input
+                                    id="email"
+                                    name="email"
+                                    type="email"
+                                    autoComplete="email"
+                                    required={useEmail}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                    placeholder="Masukkan email Anda"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
+                            </div>
+                        ) : (
+                            <div>
+                                <label htmlFor="nip" className="block text-sm font-semibold text-gray-700 mb-2">
+                                    NIP
+                                </label>
+                                <input
+                                    id="nip"
+                                    name="nip"
+                                    type="text"
+                                    autoComplete="off"
+                                    required={!useEmail}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                    placeholder="Masukkan NIP Anda"
+                                    value={nip}
+                                    onChange={(e) => setNip(e.target.value)}
+                                />
+                            </div>
+                        )}
 
                         <div>
                             <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
@@ -119,6 +138,15 @@ const Login = ({ setIsAuthenticated }) => {
                                 </div>
                             ) : 'Masuk'}
                         </button>
+                        <div className="text-center">
+                            <button
+                                type="button"
+                                onClick={() => setUseEmail(!useEmail)}
+                                className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+                            >
+                                {useEmail ? 'Masuk dengan NIP' : 'Masuk dengan Email'}
+                            </button>
+                        </div>
                     </form>
 
                     <div className="mt-6 text-center">

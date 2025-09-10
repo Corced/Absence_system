@@ -1033,6 +1033,9 @@ const AdminPanel = () => {
                                                 <h3 className="font-medium text-gray-900">{employee.name}</h3>
                                                 <p className="text-sm text-gray-500">{employee.position}</p>
                                                 <p className="text-xs text-gray-400">{employee.email}</p>
+                                                {employee.nip && (
+                                                    <p className="text-xs text-gray-500 mt-1">NIP: <span className="font-mono">{employee.nip}</span></p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

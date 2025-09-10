@@ -9,6 +9,7 @@ class Employee extends Model
     protected $fillable = [
         'name',
         'email',
+        'nip',
         'position',
         'user_id',
         'shift_id', // Add shift_id to fillable if not already present

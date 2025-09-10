@@ -4,28 +4,48 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\Employee;
 
 class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        $credentials = $request->validate([
-            'email' => 'required|email',
+        $request->validate([
             'password' => 'required',
         ]);
 
-        if (!Auth::attempt($credentials)) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
+        $user = null;
+
+        if ($request->filled('email')) {
+            $request->validate(['email' => 'email']);
+            $credentials = $request->only('email', 'password');
+            if (!Auth::attempt($credentials)) {
+                return response()->json(['message' => 'Invalid credentials'], 401);
+            }
+            $user = User::where('email', $request->email)->first();
+        } elseif ($request->filled('nip')) {
+            $request->validate(['nip' => 'string']);
+            $employee = Employee::where('nip', $request->nip)->first();
+            if (!$employee || !$employee->user) {
+                return response()->json(['message' => 'Invalid credentials'], 401);
+            }
+
+            $user = $employee->user;
+            if (!Hash::check($request->password, $user->password)) {
+                return response()->json(['message' => 'Invalid credentials'], 401);
+            }
+        } else {
+            return response()->json(['message' => 'Email or NIP is required'], 422);
         }
 
-        $user = User::where('email', $request->email)->first();
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'role' => $user->role ?? 'user', // Default to 'user' if not set
+            'role' => $user->role ?? 'user',
         ]);
     }
 

@@ -15,6 +15,8 @@ class EmployeesTableSeeder extends Seeder
                 ['id' => $i],
                 [
                     'name' => 'employee_' . $i,
+                    'email' => 'employee_' . $i . '@example.com',
+                    'nip' => str_pad((string) (100000 + $i), 8, '0', STR_PAD_LEFT),
                     'position' => 'Staff', // optional if you have this column
                 ]
             );
