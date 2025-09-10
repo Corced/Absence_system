@@ -14,6 +14,7 @@ class EmployeesTableSeeder extends Seeder
             Employee::updateOrCreate(
                 ['id' => $i],
                 [
+                    'nip' => str_pad((string)($i + 1), 6, '0', STR_PAD_LEFT),
                     'name' => 'employee_' . $i,
                     'position' => 'Staff', // optional if you have this column
                 ]
