@@ -15,6 +15,12 @@ class Employee extends Model
         'shift_id', // Add shift_id to fillable if not already present
     ];
 
+    public function setShiftIdAttribute($value): void
+    {
+        $resolved = \App\Models\Shift::resolveIdFromIdOrCode($value);
+        $this->attributes['shift_id'] = $resolved;
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
