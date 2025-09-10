@@ -50,6 +50,12 @@ const AdminPanel = () => {
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [calendarView, setCalendarView] = useState('month');
     const [statusFilter, setStatusFilter] = useState('all');
+    // Schedule states
+    const [scheduleYear, setScheduleYear] = useState(new Date().getFullYear());
+    const [scheduleMonth, setScheduleMonth] = useState(new Date().getMonth() + 1);
+    const [scheduleRows, setScheduleRows] = useState([]);
+    const [scheduleLoading, setScheduleLoading] = useState(false);
+    const [shifts, setShifts] = useState([]);
     const webcamRef = useRef(null);
     const mapRef = useRef(null);
     const attendanceTableRef = useRef(null);
@@ -92,6 +98,79 @@ const AdminPanel = () => {
             console.error('Gagal mengambil data:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Load shifts (codes) for schedule input helpers
+    const loadShifts = async () => {
+        try {
+            const res = await axios.get('/api/shifts');
+            setShifts(res.data || []);
+        } catch (e) {
+            console.error('Gagal mengambil daftar shift', e);
+        }
+    };
+
+    const daysInSelectedScheduleMonth = () => {
+        return new Date(scheduleYear, scheduleMonth, 0).getDate();
+    };
+
+    const loadSchedules = async (y = scheduleYear, m = scheduleMonth) => {
+        setScheduleLoading(true);
+        try {
+            await loadShifts();
+            const res = await axios.get(`/api/schedules?year=${y}&month=${m}`);
+            setScheduleRows(res.data || []);
+        } catch (e) {
+            console.error('Gagal memuat jadwal', e);
+        } finally {
+            setScheduleLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'schedule') {
+            loadSchedules();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
+
+    const handleScheduleCellChange = (rowIdx, key, value) => {
+        setScheduleRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, [key]: value.toUpperCase() } : r));
+    };
+
+    const bulkFillRow = (rowIdx, value) => {
+        const limit = daysInSelectedScheduleMonth();
+        setScheduleRows(prev => prev.map((r, i) => {
+            if (i !== rowIdx) return r;
+            const updated = { ...r };
+            for (let d = 1; d <= limit; d++) {
+                updated['h' + d] = value;
+            }
+            return updated;
+        }));
+    };
+
+    const saveSchedules = async () => {
+        const limit = daysInSelectedScheduleMonth();
+        const payloadItems = scheduleRows.map(r => {
+            const item = { employee_id: r.employee_id };
+            for (let d = 1; d <= 31; d++) {
+                const key = 'h' + d;
+                // Only persist within month, others send null
+                item[key] = d <= limit ? (r[key] || null) : null;
+            }
+            return item;
+        });
+        try {
+            setScheduleLoading(true);
+            await axios.post('/api/schedules', { year: scheduleYear, month: scheduleMonth, items: payloadItems });
+            alert('Jadwal berhasil disimpan');
+        } catch (e) {
+            alert('Gagal menyimpan jadwal');
+            console.error(e);
+        } finally {
+            setScheduleLoading(false);
         }
     };
 
@@ -495,6 +574,7 @@ const AdminPanel = () => {
                     {[
                         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
                         { id: 'attendance', label: 'Data Kehadiran', icon: '📅' },
+                        { id: 'schedule', label: 'Jadwal', icon: '🗓️' },
                         { id: 'employees', label: 'Karyawan', icon: '👥' },
                         { id: 'training', label: 'Pelatihan', icon: '🎯' }
                     ].map(tab => (
@@ -1022,6 +1102,124 @@ const AdminPanel = () => {
     </table>
   </div>
 </div>
+                    </div>
+                )}
+
+                {activeTab === 'schedule' && (
+                    <div className="bg-white rounded-2xl shadow-sm p-6">
+                        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
+                            <div className="flex items-end gap-3">
+                                <div>
+                                    <label className="block text-sm text-gray-600 mb-1">Tahun</label>
+                                    <input
+                                        type="number"
+                                        value={scheduleYear}
+                                        onChange={e => setScheduleYear(parseInt(e.target.value || new Date().getFullYear()))}
+                                        className="px-3 py-2 border border-gray-300 rounded-lg w-28"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-600 mb-1">Bulan</label>
+                                    <select
+                                        value={scheduleMonth}
+                                        onChange={e => setScheduleMonth(parseInt(e.target.value))}
+                                        className="px-3 py-2 border border-gray-300 rounded-lg"
+                                    >
+                                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                            <option key={m} value={m}>{new Date(2000, m - 1, 1).toLocaleString('id-ID', { month: 'long' })}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <button
+                                    onClick={() => loadSchedules()}
+                                    className="h-10 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                >
+                                    {scheduleLoading ? 'Memuat...' : 'Muat Jadwal'}
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={saveSchedules}
+                                    disabled={scheduleLoading || scheduleRows.length === 0}
+                                    className={`h-10 px-4 rounded-lg ${scheduleLoading || scheduleRows.length === 0 ? 'bg-gray-300 text-gray-600' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                                >
+                                    Simpan Jadwal
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="text-sm text-gray-600 mb-3">
+                            Gunakan kode shift (contoh: 110, 100). Klik dua kali untuk pilih cepat. Hari dalam bulan: {daysInSelectedScheduleMonth()}.
+                        </div>
+
+                        <datalist id="shift-codes">
+                            {shifts.map(s => (
+                                <option key={s.code} value={s.code}>{s.name}</option>
+                            ))}
+                        </datalist>
+
+                        <div className="overflow-auto no-oklch-colors">
+                            <table className="min-w-full text-xs">
+                                <thead className="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left text-gray-600">NIP</th>
+                                        <th className="px-3 py-2 text-left text-gray-600">Nama</th>
+                                        {Array.from({ length: daysInSelectedScheduleMonth() }, (_, i) => i + 1).map(d => (
+                                            <th key={d} className="px-2 py-2 text-center text-gray-600">h{d}</th>
+                                        ))}
+                                        <th className="px-2 py-2 text-center text-gray-600">Isi Semua</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 bg-white">
+                                    {scheduleRows.map((row, rowIdx) => (
+                                        <tr key={row.employee_id} className="hover:bg-gray-50">
+                                            <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-800">{row.nip || '-'}</td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-gray-800">{row.name}</td>
+                                            {Array.from({ length: daysInSelectedScheduleMonth() }, (_, i) => i + 1).map(d => {
+                                                const key = 'h' + d;
+                                                return (
+                                                    <td key={key} className="px-1 py-1">
+                                                        <input
+                                                            value={row[key] || ''}
+                                                            list="shift-codes"
+                                                            onChange={e => handleScheduleCellChange(rowIdx, key, e.target.value)}
+                                                            className="w-16 text-center border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                            placeholder="-"
+                                                        />
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="px-2 py-1">
+                                                <div className="flex gap-1">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Kode"
+                                                        list="shift-codes"
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') {
+                                                                bulkFillRow(rowIdx, e.currentTarget.value);
+                                                                e.currentTarget.value = '';
+                                                            }
+                                                        }}
+                                                        className="w-20 border border-gray-300 rounded px-2 py-1 text-center"
+                                                    />
+                                                    <button
+                                                        onClick={(e) => {
+                                                            const container = e.currentTarget.previousSibling;
+                                                            const val = container && container.value ? container.value : '';
+                                                            bulkFillRow(rowIdx, val);
+                                                        }}
+                                                        className="px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                                                    >
+                                                        Terapkan
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 
