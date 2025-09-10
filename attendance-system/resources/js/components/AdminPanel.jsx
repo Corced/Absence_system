@@ -209,6 +209,7 @@ const AdminPanel = () => {
 
     const exportToExcel = () => {
         const data = filteredAttendances.map(att => ({
+            'NIP': employees.find(emp => emp.id === att.employee_id)?.nip || '-',
             'Nama': employees.find(emp => emp.id === att.employee_id)?.name || 'Tidak diketahui',
             'Clock In Tanggal': new Date(att.attendance_time).toLocaleDateString('id-ID'),
             'Clock In Waktu': new Date(att.attendance_time).toLocaleTimeString('id-ID'),
@@ -229,6 +230,7 @@ const AdminPanel = () => {
         XLSX.utils.book_append_sheet(wb, ws, 'Data Kehadiran');
         
         const colWidths = [
+            { wch: 16 }, // NIP
             { wch: 20 }, // Nama
             { wch: 15 }, // Clock In Tanggal
             { wch: 12 }, // Clock In Waktu
@@ -954,6 +956,7 @@ const AdminPanel = () => {
     <table className="w-full">
       <thead className="bg-gray-50">
         <tr>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NIP</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clock In</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clock Out</th>
@@ -970,6 +973,9 @@ const AdminPanel = () => {
           const isWithinGeofence = attendance.distance && attendance.distance <= geofenceRadius;
           return (
             <tr key={index} className="hover:bg-gray-50">
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                {employees.find(emp => emp.id === attendance.employee_id)?.nip || '-'}
+              </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                 {getEmployeeName(attendance.employee_id)}
               </td>

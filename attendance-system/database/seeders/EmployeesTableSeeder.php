@@ -15,6 +15,7 @@ class EmployeesTableSeeder extends Seeder
             Employee::updateOrCreate(
                 ['id' => $i],
                 [
+                    'nip' => str_pad((string)($i + 1), 6, '0', STR_PAD_LEFT),
                     'name' => 'employee_' . $i,
                     'email' => 'employee_' . $i . '@example.com',
                     'nip' => str_pad((string) (100000 + $i), 8, '0', STR_PAD_LEFT),
