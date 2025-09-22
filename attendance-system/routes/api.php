@@ -15,11 +15,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/attendance/train', [AttendanceController::class, 'trainModel']);
     Route::get('/attendance', [AttendanceController::class, 'getAttendances']);
     Route::get('/attendance/my', [AttendanceController::class, 'getMyAttendances']);
+    Route::get('/attendance/my-shift', [AttendanceController::class, 'getMyShiftInfo']);
     Route::get('/employees', [AttendanceController::class, 'getEmployees']);
 
     // schedules
     Route::get('/schedules', [ScheduleController::class, 'index']);
     Route::post('/schedules', [ScheduleController::class, 'bulkUpsert']);
+    Route::post('/schedules/import-excel', [ScheduleController::class, 'importExcel']);
+    Route::get('/schedules/template', [ScheduleController::class, 'downloadTemplate']);
+    Route::get('/schedules/export-excel', [ScheduleController::class, 'exportExcel']);
 
     // shifts
     Route::get('/shifts', [ShiftController::class, 'index']);

@@ -56,6 +56,10 @@ const AdminPanel = () => {
     const [scheduleRows, setScheduleRows] = useState([]);
     const [scheduleLoading, setScheduleLoading] = useState(false);
     const [shifts, setShifts] = useState([]);
+    // Excel import states
+    const [excelFile, setExcelFile] = useState(null);
+    const [importLoading, setImportLoading] = useState(false);
+    const [importMessage, setImportMessage] = useState('');
     const webcamRef = useRef(null);
     const mapRef = useRef(null);
     const attendanceTableRef = useRef(null);
@@ -135,44 +139,136 @@ const AdminPanel = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
 
-    const handleScheduleCellChange = (rowIdx, key, value) => {
-        setScheduleRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, [key]: value.toUpperCase() } : r));
-    };
+const handleScheduleCellChange = (rowIdx, key, value) => {
+  setScheduleRows(prev =>
+    prev.map((r, i) =>
+      i === rowIdx
+        ? { ...r, [key]: value ? String(value).toUpperCase() : null }
+        : r
+    )
+  );
+};
+const bulkFillRow = (rowIdx, value) => {
+  const limit = daysInSelectedScheduleMonth();
+  setScheduleRows(prev =>
+    prev.map((r, i) => {
+      if (i !== rowIdx) return r;
+      const updated = { ...r };
+      for (let d = 1; d <= limit; d++) {
+        updated["h" + d] = value ? String(value).toUpperCase() : null;
+      }
+      return updated;
+    })
+  );
+};
 
-    const bulkFillRow = (rowIdx, value) => {
-        const limit = daysInSelectedScheduleMonth();
-        setScheduleRows(prev => prev.map((r, i) => {
-            if (i !== rowIdx) return r;
-            const updated = { ...r };
-            for (let d = 1; d <= limit; d++) {
-                updated['h' + d] = value;
-            }
-            return updated;
-        }));
-    };
+const saveSchedules = async () => {
+  const limit = daysInSelectedScheduleMonth();
+  const payloadItems = scheduleRows.map(r => {
+    const item = { employee_id: r.employee_id };
+    for (let d = 1; d <= 31; d++) {
+      const key = "h" + d;
+      item[key] =
+        d <= limit && r[key] !== undefined && r[key] !== ""
+          ? r[key]
+          : null;
+    }
+    return item;
+  });
 
-    const saveSchedules = async () => {
-        const limit = daysInSelectedScheduleMonth();
-        const payloadItems = scheduleRows.map(r => {
-            const item = { employee_id: r.employee_id };
-            for (let d = 1; d <= 31; d++) {
-                const key = 'h' + d;
-                // Only persist within month, others send null
-                item[key] = d <= limit ? (r[key] || null) : null;
-            }
-            return item;
-        });
-        try {
-            setScheduleLoading(true);
-            await axios.post('/api/schedules', { year: scheduleYear, month: scheduleMonth, items: payloadItems });
-            alert('Jadwal berhasil disimpan');
-        } catch (e) {
-            alert('Gagal menyimpan jadwal');
-            console.error(e);
-        } finally {
-            setScheduleLoading(false);
-        }
-    };
+  console.log("Saving schedule payload:", payloadItems); // 🔎 Debug
+
+  try {
+    setScheduleLoading(true);
+    await axios.post("/api/schedules", {
+      year: scheduleYear,
+      month: scheduleMonth,
+      items: payloadItems
+    });
+    alert("Jadwal berhasil disimpan");
+  } catch (e) {
+    alert("Gagal menyimpan jadwal");
+    console.error(e);
+  } finally {
+    setScheduleLoading(false);
+  }
+};
+
+const handleExcelImport = async () => {
+  if (!excelFile) {
+    alert('Pilih file Excel terlebih dahulu');
+    return;
+  }
+
+  setImportLoading(true);
+  setImportMessage('');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', excelFile);
+    formData.append('year', scheduleYear);
+    formData.append('month', scheduleMonth);
+
+    const response = await axios.post('/api/schedules/import-excel', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    let message = response.data.message;
+    if (response.data.error_count > 0) {
+      message += `\n\nTerdapat ${response.data.error_count} error:\n${response.data.errors.slice(0, 5).join('\n')}`;
+      if (response.data.errors.length > 5) {
+        message += `\n... dan ${response.data.errors.length - 5} error lainnya.`;
+      }
+    }
+
+    setImportMessage(message);
+    
+    // Reload schedules after successful import
+    if (response.data.imported_count > 0) {
+      await loadSchedules();
+    }
+
+    // Clear the file input
+    setExcelFile(null);
+    document.getElementById('excel-file-input').value = '';
+
+  } catch (error) {
+    const errorMsg = error.response?.data?.error || 'Gagal mengimpor file Excel';
+    setImportMessage(`Error: ${errorMsg}`);
+    console.error('Excel import error:', error);
+  } finally {
+    setImportLoading(false);
+  }
+};
+
+const handleFileChange = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    // Validate file type
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-excel' // .xls
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      alert('File harus berupa Excel (.xlsx atau .xls)');
+      event.target.value = '';
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Ukuran file tidak boleh lebih dari 10MB');
+      event.target.value = '';
+      return;
+    }
+
+    setExcelFile(file);
+    setImportMessage('');
+  }
+};
 
     // Initialize map when attendance tab is active
     useEffect(() => {
@@ -288,7 +384,6 @@ const AdminPanel = () => {
 
     const exportToExcel = () => {
         const data = filteredAttendances.map(att => ({
-            'NIP': employees.find(emp => emp.id === att.employee_id)?.nip || '-',
             'Nama': employees.find(emp => emp.id === att.employee_id)?.name || 'Tidak diketahui',
             'Clock In Tanggal': new Date(att.attendance_time).toLocaleDateString('id-ID'),
             'Clock In Waktu': new Date(att.attendance_time).toLocaleTimeString('id-ID'),
@@ -309,7 +404,6 @@ const AdminPanel = () => {
         XLSX.utils.book_append_sheet(wb, ws, 'Data Kehadiran');
         
         const colWidths = [
-            { wch: 16 }, // NIP
             { wch: 20 }, // Nama
             { wch: 15 }, // Clock In Tanggal
             { wch: 12 }, // Clock In Waktu
@@ -1036,7 +1130,7 @@ const AdminPanel = () => {
     <table className="w-full">
       <thead className="bg-gray-50">
         <tr>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NIP</th>
+          
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clock In</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clock Out</th>
@@ -1053,9 +1147,6 @@ const AdminPanel = () => {
           const isWithinGeofence = attendance.distance && attendance.distance <= geofenceRadius;
           return (
             <tr key={index} className="hover:bg-gray-50">
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {employees.find(emp => emp.id === attendance.employee_id)?.nip || '-'}
-              </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                 {getEmployeeName(attendance.employee_id)}
               </td>
@@ -1105,123 +1196,258 @@ const AdminPanel = () => {
                     </div>
                 )}
 
-                {activeTab === 'schedule' && (
-                    <div className="bg-white rounded-2xl shadow-sm p-6">
-                        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
-                            <div className="flex items-end gap-3">
-                                <div>
-                                    <label className="block text-sm text-gray-600 mb-1">Tahun</label>
-                                    <input
-                                        type="number"
-                                        value={scheduleYear}
-                                        onChange={e => setScheduleYear(parseInt(e.target.value || new Date().getFullYear()))}
-                                        className="px-3 py-2 border border-gray-300 rounded-lg w-28"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-600 mb-1">Bulan</label>
-                                    <select
-                                        value={scheduleMonth}
-                                        onChange={e => setScheduleMonth(parseInt(e.target.value))}
-                                        className="px-3 py-2 border border-gray-300 rounded-lg"
-                                    >
-                                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                                            <option key={m} value={m}>{new Date(2000, m - 1, 1).toLocaleString('id-ID', { month: 'long' })}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <button
-                                    onClick={() => loadSchedules()}
-                                    className="h-10 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                >
-                                    {scheduleLoading ? 'Memuat...' : 'Muat Jadwal'}
-                                </button>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={saveSchedules}
-                                    disabled={scheduleLoading || scheduleRows.length === 0}
-                                    className={`h-10 px-4 rounded-lg ${scheduleLoading || scheduleRows.length === 0 ? 'bg-gray-300 text-gray-600' : 'bg-green-600 text-white hover:bg-green-700'}`}
-                                >
-                                    Simpan Jadwal
-                                </button>
-                            </div>
-                        </div>
+{activeTab === 'schedule' && (
+  <div className="bg-white rounded-2xl shadow-sm p-6">
+    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
+      <div className="flex items-end gap-3">
+        <div>
+          <label className="block text-sm text-gray-600 mb-1">Tahun</label>
+          <input
+            type="number"
+            value={scheduleYear}
+            onChange={e =>
+              setScheduleYear(
+                parseInt(e.target.value || new Date().getFullYear())
+              )
+            }
+            className="px-3 py-2 border border-gray-300 rounded-lg w-28"
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-600 mb-1">Bulan</label>
+          <select
+            value={scheduleMonth}
+            onChange={e => setScheduleMonth(parseInt(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg"
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+              <option key={m} value={m}>
+                {new Date(2000, m - 1, 1).toLocaleString("id-ID", {
+                  month: "long"
+                })}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={() => loadSchedules()}
+          className="h-10 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          {scheduleLoading ? "Memuat..." : "Muat Jadwal"}
+        </button>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={async () => {
+            try {
+              const res = await axios.get('/api/schedules/export-excel', {
+                params: { year: scheduleYear, month: scheduleMonth },
+                responseType: 'blob'
+              });
 
-                        <div className="text-sm text-gray-600 mb-3">
-                            Gunakan kode shift (contoh: 110, 100). Klik dua kali untuk pilih cepat. Hari dalam bulan: {daysInSelectedScheduleMonth()}.
-                        </div>
+              const disposition = res.headers['content-disposition'] || '';
+              let filename = `jadwal_${String(scheduleYear).padStart(4, '0')}_${String(scheduleMonth).padStart(2, '0')}.xlsx`;
+              const match = disposition.match(/filename="?([^";]+)"?/);
+              if (match && match[1]) filename = match[1];
 
-                        <datalist id="shift-codes">
-                            {shifts.map(s => (
-                                <option key={s.code} value={s.code}>{s.name}</option>
-                            ))}
-                        </datalist>
+              const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(url);
+            } catch (e) {
+              alert('Gagal mengekspor jadwal');
+              console.error(e);
+            }
+          }}
+          className="h-10 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+        >
+          Export Excel
+        </button>
+        <button
+          onClick={saveSchedules}
+          disabled={scheduleLoading || scheduleRows.length === 0}
+          className={`h-10 px-4 rounded-lg ${
+            scheduleLoading || scheduleRows.length === 0
+              ? "bg-gray-300 text-gray-600"
+              : "bg-green-600 text-white hover:bg-green-700"
+          }`}
+        >
+          Simpan Jadwal
+        </button>
+      </div>
+    </div>
 
-                        <div className="overflow-auto no-oklch-colors">
-                            <table className="min-w-full text-xs">
-                                <thead className="bg-gray-50 sticky top-0">
-                                    <tr>
-                                        <th className="px-3 py-2 text-left text-gray-600">NIP</th>
-                                        <th className="px-3 py-2 text-left text-gray-600">Nama</th>
-                                        {Array.from({ length: daysInSelectedScheduleMonth() }, (_, i) => i + 1).map(d => (
-                                            <th key={d} className="px-2 py-2 text-center text-gray-600">h{d}</th>
-                                        ))}
-                                        <th className="px-2 py-2 text-center text-gray-600">Isi Semua</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 bg-white">
-                                    {scheduleRows.map((row, rowIdx) => (
-                                        <tr key={row.employee_id} className="hover:bg-gray-50">
-                                            <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-800">{row.nip || '-'}</td>
-                                            <td className="px-3 py-2 whitespace-nowrap text-gray-800">{row.name}</td>
-                                            {Array.from({ length: daysInSelectedScheduleMonth() }, (_, i) => i + 1).map(d => {
-                                                const key = 'h' + d;
-                                                return (
-                                                    <td key={key} className="px-1 py-1">
-                                                        <input
-                                                            value={row[key] || ''}
-                                                            list="shift-codes"
-                                                            onChange={e => handleScheduleCellChange(rowIdx, key, e.target.value)}
-                                                            className="w-16 text-center border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                            placeholder="-"
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="px-2 py-1">
-                                                <div className="flex gap-1">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Kode"
-                                                        list="shift-codes"
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') {
-                                                                bulkFillRow(rowIdx, e.currentTarget.value);
-                                                                e.currentTarget.value = '';
-                                                            }
-                                                        }}
-                                                        className="w-20 border border-gray-300 rounded px-2 py-1 text-center"
-                                                    />
-                                                    <button
-                                                        onClick={(e) => {
-                                                            const container = e.currentTarget.previousSibling;
-                                                            const val = container && container.value ? container.value : '';
-                                                            bulkFillRow(rowIdx, val);
-                                                        }}
-                                                        className="px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
-                                                    >
-                                                        Terapkan
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
+    {/* Excel Import Section */}
+    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-lg font-semibold text-blue-800">📊 Import dari Excel</h3>
+          <p className="text-sm text-blue-600">Upload file Excel untuk mengisi jadwal secara massal</p>
+        </div>
+        <button
+          onClick={async () => {
+            try {
+              const res = await axios.get('/api/schedules/template', {
+                responseType: 'blob'
+              });
+
+              const disposition = res.headers['content-disposition'] || '';
+              let filename = 'template_jadwal_karyawan.xlsx';
+              const match = disposition.match(/filename="?([^";]+)"?/);
+              if (match && match[1]) filename = match[1];
+
+              const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(url);
+            } catch (e) {
+              alert('Gagal mengunduh template');
+              console.error(e);
+            }
+          }}
+          className="px-3 py-1 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          📥 Download Template
+        </button>
+      </div>
+      
+      <div className="flex flex-col md:flex-row gap-3 items-start md:items-end">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Pilih File Excel (.xlsx, .xls)
+          </label>
+          <input
+            id="excel-file-input"
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Format: Kolom 1 = NIP, Kolom 2 = Nama, Kolom 3-33 = Hari 1-31
+          </p>
+        </div>
+        
+        <button
+          onClick={handleExcelImport}
+          disabled={!excelFile || importLoading}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            !excelFile || importLoading
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          }`}
+        >
+          {importLoading ? "Mengimpor..." : "📥 Import Excel"}
+        </button>
+      </div>
+
+      {importMessage && (
+        <div className={`mt-3 p-3 rounded-lg text-sm ${
+          importMessage.startsWith('Error:') 
+            ? 'bg-red-50 text-red-700 border border-red-200' 
+            : 'bg-green-50 text-green-700 border border-green-200'
+        }`}>
+          <pre className="whitespace-pre-wrap">{importMessage}</pre>
+        </div>
+      )}
+    </div>
+
+    <div className="text-sm text-gray-600 mb-3">
+      Gunakan kode shift (contoh: 110, 100). Klik dua kali untuk pilih cepat.
+      Hari dalam bulan: {daysInSelectedScheduleMonth()}.
+    </div>
+
+    <datalist id="shift-codes">
+      {shifts.map(s => (
+        <option key={s.code} value={s.code}>
+          {s.name}
+        </option>
+      ))}
+    </datalist>
+
+    <div className="overflow-auto no-oklch-colors">
+      <table className="min-w-full text-xs">
+        <thead className="bg-gray-50 sticky top-0">
+          <tr>
+            <th className="px-3 py-2 text-left text-gray-600">NIP</th>
+            <th className="px-3 py-2 text-left text-gray-600">Nama</th>
+            {Array.from({ length: daysInSelectedScheduleMonth() }, (_, i) => i + 1).map(d => (
+              <th key={d} className="px-2 py-2 text-center text-gray-600">
+                h{d}
+              </th>
+            ))}
+            <th className="px-2 py-2 text-center text-gray-600">Isi Semua</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 bg-white">
+          {scheduleRows.map((row, rowIdx) => (
+            <tr key={row.employee_id} className="hover:bg-gray-50">
+              <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-800">
+                {row.nip || "-"}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-800">
+                {row.name}
+              </td>
+              {Array.from({ length: daysInSelectedScheduleMonth() }, (_, i) => i + 1).map(d => {
+                const key = "h" + d;
+                return (
+                  <td key={key} className="px-1 py-1">
+                    <input
+                      value={row[key] || ""}
+                      list="shift-codes"
+                      onChange={e =>
+                        handleScheduleCellChange(rowIdx, key, e.target.value)
+                      }
+                      className="w-16 text-center border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="-"
+                    />
+                  </td>
+                );
+              })}
+              <td className="px-2 py-1">
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    placeholder="Kode"
+                    list="shift-codes"
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        bulkFillRow(rowIdx, e.currentTarget.value);
+                        e.currentTarget.value = "";
+                      }
+                    }}
+                    className="w-20 border border-gray-300 rounded px-2 py-1 text-center"
+                  />
+                  <button
+                    onClick={e => {
+                      const container = e.currentTarget.previousSibling;
+                      const val = container && container.value ? container.value : "";
+                      bulkFillRow(rowIdx, val);
+                    }}
+                    className="px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                  >
+                    Terapkan
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
 
                 {activeTab === 'employees' && (
                     <div className="bg-white rounded-2xl shadow-sm">

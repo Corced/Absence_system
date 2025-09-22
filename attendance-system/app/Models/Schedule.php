@@ -13,6 +13,7 @@ class Schedule extends Model
         'h21','h22','h23','h24','h25','h26','h27','h28','h29','h30','h31',
     ];
 
+
     public function employee()
     {
         return $this->belongsTo(Employee::class);

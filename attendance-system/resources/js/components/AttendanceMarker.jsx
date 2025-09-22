@@ -8,6 +8,7 @@ const AttendanceMarker = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
+    const [shiftInfo, setShiftInfo] = useState(null);
     const webcamRef = useRef(null);
     const navigate = useNavigate();
 
@@ -38,7 +39,19 @@ const AttendanceMarker = () => {
         } else {
             setError('Geolokasi tidak didukung oleh browser ini.');
         }
+
+        // Fetch shift information
+        fetchShiftInfo();
     }, [navigate]);
+
+    const fetchShiftInfo = async () => {
+        try {
+            const response = await axios.get('http://localhost:8000/api/attendance/my-shift');
+            setShiftInfo(response.data);
+        } catch (err) {
+            console.error('Failed to fetch shift info:', err);
+        }
+    };
 
 const markAttendance = async () => {
     if (!webcamRef.current || !location) {
@@ -233,6 +246,79 @@ const clockOut = async () => {
                                 </div>
                             )}
                         </div>
+
+                        {/* Shift Information */}
+                        {shiftInfo && (
+                            <div className="bg-white rounded-2xl shadow-lg p-6">
+                                <div className="flex items-center space-x-3 mb-4">
+                                    <div className="bg-purple-100 rounded-full p-2">
+                                        <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-lg font-semibold text-gray-800">Informasi Shift Hari Ini</h3>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Nama:</span>
+                                        <span className="font-medium text-gray-800">{shiftInfo.employee_info?.name}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">NIP:</span>
+                                        <span className="font-medium text-gray-800">{shiftInfo.employee_info?.nip}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Posisi:</span>
+                                        <span className="font-medium text-gray-800">{shiftInfo.employee_info?.position}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Status Hari Ini:</span>
+                                        <span className={`font-medium ${shiftInfo.is_working_today ? 'text-green-600' : 'text-red-600'}`}>
+                                            {shiftInfo.is_working_today ? 'Bekerja' : 'Libur'}
+                                        </span>
+                                    </div>
+                                    {shiftInfo.current_shift && (
+                                        <>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Shift:</span>
+                                                <span className="font-medium text-gray-800">
+                                                    {shiftInfo.current_shift.name} ({shiftInfo.current_shift.code})
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Jam Kerja:</span>
+                                                <span className="font-medium text-gray-800">
+                                                    {shiftInfo.current_shift.start_time} - {shiftInfo.current_shift.end_time}
+                                                </span>
+                                            </div>
+                                        </>
+                                    )}
+                                    {!shiftInfo.current_shift && shiftInfo.default_shift && (
+                                        <>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Shift Default:</span>
+                                                <span className="font-medium text-gray-800">
+                                                    {shiftInfo.default_shift.name} ({shiftInfo.default_shift.code})
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Jam Kerja:</span>
+                                                <span className="font-medium text-gray-800">
+                                                    {shiftInfo.default_shift.start_time} - {shiftInfo.default_shift.end_time}
+                                                </span>
+                                            </div>
+                                        </>
+                                    )}
+                                    {shiftInfo.today_shift_code && (
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">Kode Shift Hari Ini:</span>
+                                            <span className="font-medium text-gray-800">{shiftInfo.today_shift_code}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Messages */}
                         {error && (

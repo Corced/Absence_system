@@ -155,7 +155,13 @@ public function markAttendance(Request $request)
                 return response()->json(['error' => 'Unauthorized: Face does not match logged-in user'], 403);
             }
 
-            $shift = $employee->shift;
+            // Get current shift based on today's schedule
+            $shift = $employee->getCurrentShift();
+
+            // If no current shift from schedule, fallback to default shift
+            if (!$shift) {
+                $shift = $employee->shift;
+            }
 
             // Check if shift is null and handle accordingly
             if (!$shift) {
@@ -308,5 +314,65 @@ public function markAttendance(Request $request)
             ->get();
 
         return response()->json($attendances);
+    }
+
+    public function getMyShiftInfo()
+    {
+        $user = Auth::user();
+        $employee = Employee::where('user_id', $user->id)->first();
+        
+        if (!$employee) {
+            return response()->json(['error' => 'Employee not found'], 404);
+        }
+
+        // Get current shift based on today's schedule
+        $currentShift = $employee->getCurrentShift();
+        
+        // Get default shift
+        $defaultShift = $employee->shift;
+
+        $now = now();
+        $year = $now->year;
+        $month = $now->month;
+        $day = $now->day;
+
+        // Get today's schedule
+        $todaySchedule = $employee->schedules()
+            ->where('year', $year)
+            ->where('month', $month)
+            ->first();
+
+        $todayShiftCode = null;
+        if ($todaySchedule) {
+            $dayKey = 'h' . $day;
+            $todayShiftCode = $todaySchedule->$dayKey;
+        }
+
+        return response()->json([
+            'current_shift' => $currentShift ? [
+                'id' => $currentShift->id,
+                'code' => $currentShift->code,
+                'name' => $currentShift->name,
+                'start_time' => $currentShift->start_time,
+                'end_time' => $currentShift->end_time,
+                'timezone' => $currentShift->timezone,
+            ] : null,
+            'default_shift' => $defaultShift ? [
+                'id' => $defaultShift->id,
+                'code' => $defaultShift->code,
+                'name' => $defaultShift->name,
+                'start_time' => $defaultShift->start_time,
+                'end_time' => $defaultShift->end_time,
+                'timezone' => $defaultShift->timezone,
+            ] : null,
+            'today_shift_code' => $todayShiftCode,
+            'is_working_today' => $todayShiftCode && $todayShiftCode !== 'OFF' && $todayShiftCode !== '',
+            'employee_info' => [
+                'id' => $employee->id,
+                'nip' => $employee->nip,
+                'name' => $employee->name,
+                'position' => $employee->position,
+            ]
+        ]);
     }
 }
