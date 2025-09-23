@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 
 class Employee extends Model
 {
@@ -10,11 +11,25 @@ class Employee extends Model
         'nip',
         'name',
         'email',
-        'nip',
         'position',
         'user_id',
-        'shift_id', // Add shift_id to fillable if not already present
+        'shift_id',
     ];
+
+    protected static function booted()
+    {
+        static::updated(function ($employee) {
+            // Log shift changes for auditing
+            if ($employee->isDirty('shift_id')) {
+                $oldShift = Shift::find($employee->getOriginal('shift_id'));
+                $newShift = $employee->shift;
+                
+                Log::info("Employee {$employee->name} shift changed from " . 
+                         ($oldShift ? $oldShift->name : 'None') . " to " . 
+                         ($newShift ? $newShift->name : 'None'));
+            }
+        });
+    }
 
     public function setShiftIdAttribute($value): void
     {
@@ -77,18 +92,19 @@ class Employee extends Model
         }
 
         // Find the most frequent shift code
-        $mostFrequentCode = array_keys($shiftCounts, max($shiftCounts))[0];
+        arsort($shiftCounts);
+        $mostFrequentCode = array_key_first($shiftCounts);
         
         // Find the shift by code
         $shift = Shift::where('code', $mostFrequentCode)->first();
         
-        if ($shift) {
+        if ($shift && $this->shift_id !== $shift->id) {
             $this->shift_id = $shift->id;
             $this->save();
             return $shift;
         }
 
-        return null;
+        return $shift; // Return the shift even if no change was made
     }
 
     /**
@@ -121,5 +137,30 @@ class Employee extends Model
         // Find shift by code
         $shift = Shift::where('code', $shiftCode)->first();
         return $shift ?: $this->shift;
+    }
+
+    /**
+     * Recalculate shift for all employees based on current month's schedule
+     */
+    public static function recalculateAllShifts($year = null, $month = null)
+    {
+        if (!$year) {
+            $year = date('Y');
+        }
+        if (!$month) {
+            $month = date('n');
+        }
+
+        $employees = self::all();
+        $updatedCount = 0;
+
+        foreach ($employees as $employee) {
+            $shift = $employee->assignShiftFromSchedules($year, $month);
+            if ($shift) {
+                $updatedCount++;
+            }
+        }
+
+        return $updatedCount;
     }
 }
