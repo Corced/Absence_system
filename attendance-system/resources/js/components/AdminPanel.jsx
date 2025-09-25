@@ -55,7 +55,17 @@ const AdminPanel = () => {
     const [scheduleMonth, setScheduleMonth] = useState(new Date().getMonth() + 1);
     const [scheduleRows, setScheduleRows] = useState([]);
     const [scheduleLoading, setScheduleLoading] = useState(false);
-    const [shifts, setShifts] = useState([]);
+const [shifts, setShifts] = useState([]);
+const [shiftForm, setShiftForm] = useState({
+    id: null,
+    code: '',
+    name: '',
+    start_time: '',
+    end_time: '',
+    timezone: 'Asia/Jakarta'
+});
+const [shiftLoading, setShiftLoading] = useState(false);
+const [isEditingShift, setIsEditingShift] = useState(false);
     // Excel import states
     const [excelFile, setExcelFile] = useState(null);
     const [importLoading, setImportLoading] = useState(false);
@@ -65,6 +75,7 @@ const AdminPanel = () => {
     const attendanceTableRef = useRef(null);
     const navigate = useNavigate();
 
+    
     // Hospital locations and geofence radius
     const hospitalLocations = [
         { lat: -7.9901595, lon: 112.6205187 },
@@ -90,6 +101,121 @@ const AdminPanel = () => {
         fetchData();
     }, [navigate]);
 
+    // Shift CRUD functions
+const loadShifts = async () => {
+    try {
+        const res = await axios.get('/api/shifts');
+        setShifts(res.data || []);
+    } catch (e) {
+        console.error('Gagal mengambil daftar shift', e);
+        alert('Gagal memuat data shift');
+    }
+};
+
+const handleShiftInputChange = (field, value) => {
+    setShiftForm(prev => ({
+        ...prev,
+        [field]: value
+    }));
+};
+
+const resetShiftForm = () => {
+    setShiftForm({
+        id: null,
+        code: '',
+        name: '',
+        start_time: '',
+        end_time: '',
+        timezone: 'Asia/Jakarta'
+    });
+    setIsEditingShift(false);
+};
+
+const validateShiftForm = () => {
+    if (!shiftForm.code.trim()) {
+        alert('Kode shift harus diisi');
+        return false;
+    }
+    if (!shiftForm.name.trim()) {
+        alert('Nama shift harus diisi');
+        return false;
+    }
+    if (!shiftForm.start_time) {
+        alert('Waktu mulai harus diisi');
+        return false;
+    }
+    if (!shiftForm.end_time) {
+        alert('Waktu selesai harus diisi');
+        return false;
+    }
+    
+    // Validate time format and logic
+    if (shiftForm.start_time >= shiftForm.end_time) {
+        alert('Waktu selesai harus setelah waktu mulai');
+        return false;
+    }
+    
+    return true;
+};
+
+const createShift = async () => {
+    if (!validateShiftForm()) return;
+    
+    setShiftLoading(true);
+    try {
+        await axios.post('/api/shifts', shiftForm);
+        await loadShifts();
+        resetShiftForm();
+        alert('Shift berhasil ditambahkan');
+    } catch (e) {
+        console.error('Gagal membuat shift', e);
+        alert('Gagal membuat shift: ' + (e.response?.data?.error || e.message));
+    } finally {
+        setShiftLoading(false);
+    }
+};
+
+const editShift = (shift) => {
+    setShiftForm({
+        id: shift.id,
+        code: shift.code,
+        name: shift.name,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        timezone: shift.timezone || 'Asia/Jakarta'
+    });
+    setIsEditingShift(true);
+};
+
+const updateShift = async () => {
+    if (!validateShiftForm()) return;
+    
+    setShiftLoading(true);
+    try {
+        await axios.put(`/api/shifts/${shiftForm.id}`, shiftForm);
+        await loadShifts();
+        resetShiftForm();
+        alert('Shift berhasil diperbarui');
+    } catch (e) {
+        console.error('Gagal memperbarui shift', e);
+        alert('Gagal memperbarui shift: ' + (e.response?.data?.error || e.message));
+    } finally {
+        setShiftLoading(false);
+    }
+};
+
+const deleteShift = async (shiftId) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus shift ini?')) return;
+    
+    try {
+        await axios.delete(`/api/shifts/${shiftId}`);
+        await loadShifts();
+        alert('Shift berhasil dihapus');
+    } catch (e) {
+        console.error('Gagal menghapus shift', e);
+        alert('Gagal menghapus shift: ' + (e.response?.data?.error || e.message));
+    }
+};
     const fetchData = async () => {
         try {
             const [attRes, empRes] = await Promise.all([
@@ -102,16 +228,6 @@ const AdminPanel = () => {
             console.error('Gagal mengambil data:', err);
         } finally {
             setLoading(false);
-        }
-    };
-
-    // Load shifts (codes) for schedule input helpers
-    const loadShifts = async () => {
-        try {
-            const res = await axios.get('/api/shifts');
-            setShifts(res.data || []);
-        } catch (e) {
-            console.error('Gagal mengambil daftar shift', e);
         }
     };
 
@@ -138,6 +254,16 @@ const AdminPanel = () => {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
+
+useEffect(() => {
+    if (activeTab === 'shifts') {
+        loadShifts();
+    }
+    if (activeTab === 'schedule') {
+        loadSchedules();
+        loadShifts(); // Also load shifts for schedule page
+    }
+}, [activeTab]);
 
 const handleScheduleCellChange = (rowIdx, key, value) => {
   setScheduleRows(prev =>
@@ -669,6 +795,7 @@ const handleFileChange = (event) => {
                         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
                         { id: 'attendance', label: 'Data Kehadiran', icon: '📅' },
                         { id: 'schedule', label: 'Jadwal', icon: '🗓️' },
+                        { id: 'shifts', label: 'Shift', icon: '⏰' },
                         { id: 'employees', label: 'Karyawan', icon: '👥' },
                         { id: 'training', label: 'Pelatihan', icon: '🎯' }
                     ].map(tab => (
@@ -1448,6 +1575,182 @@ const handleFileChange = (event) => {
   </div>
 )}
 
+{activeTab === 'shifts' && (
+    <div className="bg-white rounded-2xl shadow-sm p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+                <h2 className="text-xl font-bold text-gray-800">Manajemen Shift</h2>
+                <p className="text-gray-600 mt-1">Kelola jadwal shift karyawan</p>
+            </div>
+            <button
+                onClick={loadShifts}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+                🔄 Refresh
+            </button>
+        </div>
+
+        {/* Shift Form */}
+        <div className="bg-gray-50 rounded-xl p-6 mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                {isEditingShift ? 'Edit Shift' : 'Tambah Shift Baru'}
+            </h3>
+            
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Kode Shift *
+                    </label>
+                    <input
+                        type="text"
+                        value={shiftForm.code}
+                        onChange={(e) => handleShiftInputChange('code', e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Contoh: 110"
+                        maxLength="10"
+                    />
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Shift *
+                    </label>
+                    <input
+                        type="text"
+                        value={shiftForm.name}
+                        onChange={(e) => handleShiftInputChange('name', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Contoh: Shift Pagi"
+                    />
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Waktu Mulai *
+                    </label>
+                    <input
+                        type="time"
+                        value={shiftForm.start_time}
+                        onChange={(e) => handleShiftInputChange('start_time', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Waktu Selesai *
+                    </label>
+                    <input
+                        type="time"
+                        value={shiftForm.end_time}
+                        onChange={(e) => handleShiftInputChange('end_time', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+            </div>
+            
+            <div className="flex space-x-3">
+                <button
+                    onClick={isEditingShift ? updateShift : createShift}
+                    disabled={shiftLoading}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        shiftLoading
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                >
+                    {shiftLoading ? 'Menyimpan...' : (isEditingShift ? 'Perbarui Shift' : 'Tambah Shift')}
+                </button>
+                
+                {isEditingShift && (
+                    <button
+                        onClick={resetShiftForm}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                        Batal
+                    </button>
+                )}
+            </div>
+        </div>
+
+        {/* Shifts Table */}
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                    <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Kode
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Nama Shift
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Waktu Mulai
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Waktu Selesai
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Durasi
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Aksi
+                        </th>
+                    </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                    {shifts.map((shift) => {
+                        const start = new Date(`2000-01-01T${shift.start_time}`);
+                        const end = new Date(`2000-01-01T${shift.end_time}`);
+                        const durationMs = end - start;
+                        const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+                        const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+                        
+                        return (
+                            <tr key={shift.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 whitespace-nowrap font-mono font-medium text-gray-900">
+                                    {shift.code}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-gray-900">
+                                    {shift.name}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-gray-900">
+                                    {shift.start_time}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-gray-900">
+                                    {shift.end_time}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                                    {durationHours} jam {durationMinutes} menit
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap space-x-2">
+                                    <button
+                                        onClick={() => editShift(shift)}
+                                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-xs"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => deleteShift(shift.id)}
+                                        className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs"
+                                    >
+                                        Hapus
+                                    </button>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+            
+            {shifts.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                    Tidak ada data shift. Tambahkan shift pertama Anda.
+                </div>
+            )}
+        </div>
+    </div>
+)}
 
                 {activeTab === 'employees' && (
                     <div className="bg-white rounded-2xl shadow-sm">

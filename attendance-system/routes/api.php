@@ -25,6 +25,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/schedules/template', [ScheduleController::class, 'downloadTemplate']);
     Route::get('/schedules/export-excel', [ScheduleController::class, 'exportExcel']);
 
-    // shifts
+    // shifts - CRUD routes
     Route::get('/shifts', [ShiftController::class, 'index']);
+    Route::post('/shifts', [ShiftController::class, 'store']);
+    Route::put('/shifts/{shift}', [ShiftController::class, 'update']);
+    Route::delete('/shifts/{shift}', [ShiftController::class, 'destroy']);
 });
