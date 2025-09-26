@@ -9,6 +9,7 @@ const AttendanceMarker = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [shiftInfo, setShiftInfo] = useState(null);
+  const [attendances, setAttendances] = useState([]);
   const webcamRef = useRef(null);
   const navigate = useNavigate();
 
@@ -42,6 +43,9 @@ const AttendanceMarker = () => {
 
     // Fetch shift information
     fetchShiftInfo();
+    
+    // Fetch attendance history
+    fetchMyAttendances();
   }, [navigate]);
 
   const fetchShiftInfo = async () => {
@@ -50,6 +54,15 @@ const AttendanceMarker = () => {
       setShiftInfo(response.data);
     } catch (err) {
       console.error('Failed to fetch shift info:', err);
+    }
+  };
+
+  const fetchMyAttendances = async () => {
+    try {
+      const response = await axios.get('http://localhost:8000/api/attendance/my');
+      setAttendances(response.data);
+    } catch (err) {
+      console.error('Failed to fetch attendances:', err);
     }
   };
 
@@ -76,6 +89,8 @@ const AttendanceMarker = () => {
         longitude: location.longitude,
       });
       setSuccess(response.data.message);
+      // Refresh attendance data after successful marking
+      fetchMyAttendances();
     } catch (err) {
       console.log('Full error response:', err.response);
       const errorMessage = err.response?.data?.error || '';
@@ -106,6 +121,8 @@ const AttendanceMarker = () => {
     try {
       const response = await axios.post('http://localhost:8000/api/attendance/clock-out', {});
       setSuccess(response.data.message || 'Berhasil clock out');
+      // Refresh attendance data after successful clock out
+      fetchMyAttendances();
     } catch (err) {
       const errorMessage = err.response?.data?.error || '';
       setError(errorMessage || 'Gagal clock out.');
@@ -118,6 +135,40 @@ const AttendanceMarker = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('role');
     navigate('/login');
+  };
+
+  // Format date to Indonesian format
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleDateString('id-ID', options);
+  };
+
+  // Format time only
+  const formatTime = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Get shift information for a specific attendance date
+  const getShiftForDate = (attendanceDate) => {
+    if (!shiftInfo) return '-';
+    
+    // For now, we'll use the current shift info for all dates
+    // In a more advanced implementation, you might want to fetch historical shift data
+    if (shiftInfo.current_shift) {
+      return `${shiftInfo.current_shift.name} (${shiftInfo.current_shift.code})`;
+    } else if (shiftInfo.default_shift) {
+      return `${shiftInfo.default_shift.name} (${shiftInfo.default_shift.code})`;
+    }
+    
+    return '-';
+  };
+
+  // Check if attendance is complete (both clock-in and clock-out)
+  const isAttendanceComplete = (attendance) => {
+    return attendance.clock_out_time !== null;
   };
 
   return (
@@ -339,6 +390,71 @@ const AttendanceMarker = () => {
               </div>
             </div>
           )}
+
+          {/* Attendance History Table */}
+          <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="bg-green-100 rounded-full p-2">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800">Riwayat Kehadiran</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-gray-500">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3">Tanggal</th>
+                    <th className="px-4 py-3">Shift</th>
+                    <th className="px-4 py-3">Masuk</th>
+                    <th className="px-4 py-3">Pulang</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendances.length > 0 ? (
+                    attendances.map((attendance, index) => (
+                      <tr key={attendance.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                          {formatDate(attendance.attendance_time)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {getShiftForDate(attendance.attendance_time)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatTime(attendance.attendance_time)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatTime(attendance.clock_out_time)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            isAttendanceComplete(attendance) 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {isAttendanceComplete(attendance) ? 'Lengkap' : 'Belum Pulang'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="px-4 py-4 text-center text-gray-500">
+                        Belum ada data kehadiran
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* Messages */}
           {error && (
