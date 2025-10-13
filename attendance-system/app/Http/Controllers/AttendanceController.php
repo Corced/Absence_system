@@ -375,4 +375,53 @@ public function markAttendance(Request $request)
             ]
         ]);
     }
+
+    public function getTomorrowShift()
+    {
+        $user = Auth::user();
+        $employee = Employee::where('user_id', $user->id)->first();
+        
+        if (!$employee) {
+            return response()->json(['error' => 'Employee not found'], 404);
+        }
+
+        $tomorrow = now()->addDay();
+        $year = $tomorrow->year;
+        $month = $tomorrow->month;
+        $day = $tomorrow->day;
+
+        // Get tomorrow's schedule
+        $tomorrowSchedule = $employee->schedules()
+            ->where('year', $year)
+            ->where('month', $month)
+            ->first();
+
+        $tomorrowShiftCode = null;
+        if ($tomorrowSchedule) {
+            $dayKey = 'h' . $day;
+            $tomorrowShiftCode = $tomorrowSchedule->$dayKey;
+        }
+
+        $tomorrowShift = null;
+        if ($tomorrowShiftCode && $tomorrowShiftCode !== 'OFF' && $tomorrowShiftCode !== '') {
+            $shift = \App\Models\Shift::where('code', $tomorrowShiftCode)->first();
+            if ($shift) {
+                $tomorrowShift = [
+                    'id' => $shift->id,
+                    'code' => $shift->code,
+                    'name' => $shift->name,
+                    'start_time' => $shift->start_time,
+                    'end_time' => $shift->end_time,
+                    'timezone' => $shift->timezone,
+                ];
+            }
+        }
+
+        return response()->json([
+            'tomorrow_shift' => $tomorrowShift,
+            'tomorrow_shift_code' => $tomorrowShiftCode,
+            'is_working_tomorrow' => $tomorrowShiftCode && $tomorrowShiftCode !== 'OFF' && $tomorrowShiftCode !== '',
+            'date' => $tomorrow->format('Y-m-d'),
+        ]);
+    }
 }

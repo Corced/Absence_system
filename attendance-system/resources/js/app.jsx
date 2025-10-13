@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import AttendanceMarker from './components/AttendanceMarker';
 import AdminPanel from './components/AdminPanel';
+import UserAttendanceView from './components/UserAttendanceView';
 
 const App = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('auth_token'));
@@ -28,6 +29,10 @@ const App = () => {
                 <Route
                     path="/attendance"
                     element={isAuthenticated ? <AttendanceMarker /> : <Navigate to="/login" />}
+                />
+                <Route
+                    path="/my-attendance"
+                    element={isAuthenticated ? <UserAttendanceView /> : <Navigate to="/login" />}
                 />
                 <Route
                     path="/admin"

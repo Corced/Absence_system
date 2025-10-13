@@ -1,8 +1,9 @@
 import cv2
 import os
 import numpy as np
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import shutil
+import time
 
 app = Flask(__name__)
 recognizer = cv2.face.LBPHFaceRecognizer_create()
@@ -150,6 +151,33 @@ def retrain():
     # Train for this employee
     success = train_recognizer(employee_id)
     return jsonify({'message': f'Model trained for employee_{employee_id}' if success else 'No valid images found for training'}), 200 if success else 400
+
+@app.route('/photos/<path:filename>')
+def serve_photo(filename):
+    """Serve profile photos for employees"""
+    try:
+        photo_path = os.path.join(PHOTOS_DIR, filename)
+        if os.path.exists(photo_path) and os.path.isfile(photo_path):
+            return send_file(photo_path)
+        else:
+            return jsonify({'error': 'Photo not found'}), 404
+    except Exception as e:
+        print(f"❌ Error serving photo {filename}: {e}")
+        return jsonify({'error': 'Failed to serve photo'}), 500
+
+@app.route('/photos/<employee_folder>/')
+def list_employee_photos(employee_folder):
+    """List photos for a specific employee"""
+    try:
+        employee_dir = os.path.join(PHOTOS_DIR, employee_folder)
+        if os.path.exists(employee_dir) and os.path.isdir(employee_dir):
+            photos = [f for f in os.listdir(employee_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            return jsonify(photos)
+        else:
+            return jsonify([])
+    except Exception as e:
+        print(f"❌ Error listing photos for {employee_folder}: {e}")
+        return jsonify([])
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -16,6 +16,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendance', [AttendanceController::class, 'getAttendances']);
     Route::get('/attendance/my', [AttendanceController::class, 'getMyAttendances']);
     Route::get('/attendance/my-shift', [AttendanceController::class, 'getMyShiftInfo']);
+    Route::get('/attendance/tomorrow-shift', [AttendanceController::class, 'getTomorrowShift']);
     Route::get('/employees', [AttendanceController::class, 'getEmployees']);
 
     // schedules
