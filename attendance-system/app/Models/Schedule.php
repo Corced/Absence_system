@@ -15,6 +15,10 @@ class Schedule extends Model
         'needs_shift_recalculation'
     ];
 
+    protected $casts = [
+        'last_updated_at' => 'datetime',
+    ];
+
     protected static function booted()
     {
         static::saving(function ($schedule) {
